@@ -65,3 +65,4 @@ class ConsensusDecision(HermesBaseModel):
     suggested_entry: float = Field(..., gt=0.0)
     suggested_stop: float = Field(..., gt=0.0)
     suggested_target: float = Field(..., gt=0.0)
+

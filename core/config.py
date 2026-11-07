@@ -184,3 +184,4 @@ def load_hermes_config(config_dir: str | Path | None = None) -> HermesConfig:
         raw_strategies=strat_raw.get("families", {}),
         raw_models=models_raw,
     )
+

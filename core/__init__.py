@@ -58,3 +58,4 @@ __all__ = [
     "MarketRegimeType",
     "RegimeClassification",
 ]
+

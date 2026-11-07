@@ -93,3 +93,4 @@ class TestPrioritizedEventBus:
         failed_event, err_msg = bus._dead_letter_queue[0]
         assert failed_event.event_type == "test.error"
         assert "Falha intencional de teste" in err_msg
+

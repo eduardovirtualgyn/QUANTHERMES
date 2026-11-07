@@ -73,3 +73,4 @@ class TestLoggingSanitizer:
 
         assert "DangerousUnmaskedPass" not in output
         assert parsed["context"]["token"] == "***MASKED***"
+

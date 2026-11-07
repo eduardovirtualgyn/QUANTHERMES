@@ -30,3 +30,4 @@ class IdentifiableEvent(HermesBaseModel):
 
     event_id: UUID = Field(default_factory=uuid4, description="Identificador único universal do evento")
     timestamp: datetime = Field(default_factory=utc_now, description="Timestamp UTC de criação")
+

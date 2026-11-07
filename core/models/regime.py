@@ -30,3 +30,4 @@ class RegimeClassification(HermesBaseModel):
     entropy: float = Field(..., ge=0.0, description="Entropia de Shannon (medida de incerteza)")
     is_uncertain: bool = Field(default=False, description="Flag que sinaliza regime de alta incerteza")
     timestamp: datetime = Field(default_factory=utc_now)
+

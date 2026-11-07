@@ -160,3 +160,4 @@ class PrioritizedEventBus:
                     error=str(exc),
                 )
                 self._dead_letter_queue.append((event, str(exc)))
+

@@ -190,3 +190,4 @@ class TestRiskSchemas:
                 risk_amount_money=100.0,
                 risk_percentage=0.60,  # Inválido: teto absoluto é 0.50%
             )
+
