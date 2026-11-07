@@ -97,6 +97,36 @@ class OrderRequest(HermesBaseModel):
     timestamp: datetime = Field(default_factory=utc_now)
 
 
+class TradeProposal(HermesBaseModel):
+    """Proposta de operação estruturada pelo Portfolio Manager para avaliação soberana do Risk Engine."""
+
+    proposal_id: UUID = Field(default_factory=uuid4, description="ID exclusivo da proposta")
+    decision_id: UUID = Field(..., description="ID da decisão de consenso vinculada")
+    strategy_id: str = Field(..., description="Identificador da estratégia (ex: STRAT_MOMENTUM_XAUUSD)")
+    symbol: str = Field(..., description="Instrumento financeiro (ex: EURUSD, XAUUSD)")
+    action: Literal["BUY", "SELL"] = Field(..., description="Direção da operação proposta")
+    entry_price: float = Field(..., gt=0.0, description="Preço de referência para entrada")
+    stop_loss: float = Field(..., gt=0.0, description="Preço mandatório do Stop Loss")
+    take_profit: float = Field(default=0.0, ge=0.0, description="Preço do Take Profit")
+    target_risk_pct: float = Field(default=0.25, gt=0.0, le=0.50, description="Risco percentual pretendido (máx 0.50%)")
+    max_slippage_points: int = Field(default=30, ge=1, description="Tolerância de slippage em pontos")
+    magic: int = Field(default=100001, gt=0, description="Magic Number identificador")
+    comment: str = Field(default="HERMES_PROP", description="Comentário rastreável")
+    timestamp: datetime = Field(default_factory=utc_now)
+
+    @model_validator(mode="after")
+    def validate_proposal_coherence(self) -> Self:
+        if self.action == "BUY" and self.stop_loss >= self.entry_price:
+            raise ValueError(
+                f"Proposta BUY inválida: Stop Loss ({self.stop_loss}) deve ser estritamente menor que entrada ({self.entry_price})"
+            )
+        if self.action == "SELL" and self.stop_loss <= self.entry_price:
+            raise ValueError(
+                f"Proposta SELL inválida: Stop Loss ({self.stop_loss}) deve ser estritamente maior que entrada ({self.entry_price})"
+            )
+        return self
+
+
 class OrderResult(HermesBaseModel):
     """Resultado da execução de ordem retornado pelo terminal ou corretora."""
 

@@ -143,3 +143,4 @@ class HistoricalDataStore:
                 )
             )
         return bars
+

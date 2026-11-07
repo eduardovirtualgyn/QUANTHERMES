@@ -166,3 +166,9 @@ class StructuredLogger:
 # Instância global padrão
 logger = setup_logger("quant_hermes")
 log = StructuredLogger(logger)
+
+
+def get_logger(name: str = "quant_hermes") -> StructuredLogger:
+    """Retorna uma instância de StructuredLogger configurada."""
+    return StructuredLogger(setup_logger(name))
+

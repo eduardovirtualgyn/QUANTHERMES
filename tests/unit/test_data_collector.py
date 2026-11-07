@@ -77,3 +77,4 @@ class TestMarketDataCollector:
         assert len(gaps) == 1
         assert gaps[0]["symbol"] == "EURUSD"
         assert gaps[0]["missing_seconds"] == 1800.0  # 30 minutos
+

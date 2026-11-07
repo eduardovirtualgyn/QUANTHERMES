@@ -199,3 +199,4 @@ class TestPaperTradingAdapter:
         assert res.retcode == 10019  # Sem margem
         positions = await adapter.get_open_positions("EURUSD")
         assert len(positions) == 0
+

@@ -118,3 +118,4 @@ class TestWindowsMT5Adapter:
         # O mt5.order_send deve ter sido chamado exatamente UMA vez
         assert mock_mt5.order_send.call_count == 1
         assert res1.order_ticket == res2.order_ticket
+

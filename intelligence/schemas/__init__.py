@@ -11,6 +11,7 @@ from core.models.risk import (
     OrderResult,
     Position,
     RiskAuthorization,
+    TradeProposal,
 )
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "AccountState",
     "Position",
     "RiskAuthorization",
+    "TradeProposal",
     "OrderRequest",
     "OrderResult",
     "MarketRegimeType",

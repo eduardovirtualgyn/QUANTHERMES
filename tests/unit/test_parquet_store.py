@@ -99,3 +99,4 @@ class TestHistoricalDataStore:
         assert max(b.time for b in as_of_bars) <= decision_time
         # Prova que dados futuros de 10:10 e 10:15 foram estritamente bloqueados
         assert not any(b.time > decision_time for b in as_of_bars)
+

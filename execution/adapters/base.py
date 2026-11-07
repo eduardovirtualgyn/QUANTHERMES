@@ -89,3 +89,4 @@ class TradingPlatformAdapter(ABC):
     async def modify_position(self, ticket: int, stop_loss: float, take_profit: float) -> OrderResult:
         """Modifica os níveis de Stop Loss e Take Profit de uma posição ativa."""
         pass
+

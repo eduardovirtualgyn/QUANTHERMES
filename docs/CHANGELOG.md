@@ -4,6 +4,55 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [0.4.0-phase3] — 2026-11-07
+
+### Adicionado
+* **FASE 3 — Risk e Portfolio Concluída:**
+  * Implementação do `risk/position_sizer.py` (`PositionSizer`):
+    * Cálculo exato de perda por lote a partir de `tick_size` e `tick_value`.
+    * Arredondamento estritamente para baixo (*Floor*) no passo de volume (`volStep`), prevenindo sobrealavancagem acidental.
+    * Postura Fail-Safe retornando 0.0 se volume calculado for menor que o lote mínimo (`volMin`).
+  * Implementação do `risk/circuit_breakers.py` (`CircuitBreakers`):
+    * `DailyLossGuard`: trava novas ordens se perda diária atingir 1.50% (reseta às 00:00 UTC).
+    * `WeeklyLossGuard`: trava novas ordens se perda semanal atingir 3.00% (reseta na segunda-feira 00:00 UTC).
+    * `EmergencyDrawdownGuard`: desarma o sistema se drawdown atingir 8.00% (piso inviolável).
+    * `WeekendRiskGuard`: bloqueia operações na sexta-feira após 20:00 UTC e aos finais de semana.
+    * `CircuitBreakerManager`: verificação encadeada prioritária de todos os guardiões.
+  * Implementação do `risk/kill_switch.py` (`KillSwitch`):
+    * Trava de emergência global com persistência atômica em disco (`data/storage/kill_switch_state.json`), sobrevivendo a reinicializações.
+    * Desarme restrito com token de operador humano.
+    * Rotina assíncrona de liquidação compulsória (`execute_emergency_liquidation`) de todas as posições em aberto no terminal.
+  * Implementação do `risk/engine.py` (`RiskEngine`):
+    * Autoridade soberana que centraliza todas as aprovações de ordens (`RiskAuthorization`).
+    * Validação em 9 etapas: Fail-Safe em estado nulo da conta, Kill Switch, Circuit Breakers, limite de 3 posições abertas totais e 1 por símbolo, Stop Loss mandatório, filtro de spread anômalo (> 2.0x média), limite de risco agregado de 1.00% da conta e dimensionamento de lote.
+  * Implementação do `portfolio/correlation.py` (`CorrelationMonitor`):
+    * Monitoramento de correlação de Pearson e concentração cambial na moeda USD.
+    * Bloqueio de novas operações caso exceda o limite de 2 pares correlacionados na mesma direção.
+  * Implementação do `portfolio/allocator.py` (`CapitalAllocator`):
+    * Alocação e controle de orçamento de risco por família de estratégia (Trend, Breakout, Momentum, Mean Reversion, SMC, Scalping, Swing).
+    * Garantia dos tetos invioláveis de 0.50% por operação e 1.00% agregado.
+  * Implementação do `portfolio/manager.py` (`PortfolioManager`):
+    * Arbitragem e filtragem de deliberações de consenso (AG08).
+    * Deduplicação de sinais idênticos dentro de janela de cooldown (60s).
+    * Geração estruturada de `TradeProposal` e submissão ao `RiskEngine`.
+  * Implementação do `portfolio/reconciler.py` (`PositionReconciler`):
+    * Auditoria periódica comparando estado do broker com registro interno.
+    * Detecção de posições órfãs, posições fantasma e descompasso de Stop Loss.
+    * Auto-correção de divergências de Stop Loss via `modify_position`.
+  * Criação de 60 novos testes automatizados:
+    * `tests/risk/test_position_sizer.py` (7 testes).
+    * `tests/risk/test_circuit_breakers.py` (15 testes).
+    * `tests/risk/test_kill_switch.py` (7 testes).
+    * `tests/risk/test_risk_engine.py` (9 testes).
+    * `tests/unit/test_correlation_monitor.py` (5 testes).
+    * `tests/unit/test_capital_allocator.py` (6 testes).
+    * `tests/unit/test_portfolio_manager.py` (4 testes).
+    * `tests/unit/test_reconciler.py` (4 testes).
+    * `tests/contract/test_schemas.py` (+3 testes para `TradeProposal`).
+  * Total de testes automatizados do projeto elevado para **105 testes (100% PASS em 2.29s)**.
+
+---
+
 ## [0.3.0-phase2] — 2026-11-07
 
 ### Adicionado

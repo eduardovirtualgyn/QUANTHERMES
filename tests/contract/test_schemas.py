@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from core.models.market import MarketTick, MarketBar, TimeFrame
 from core.models.agent import AgentSignal, SignalDirection, ConsensusDecision
-from core.models.risk import RiskAuthorization, AccountState, Position, OrderRequest
+from core.models.risk import RiskAuthorization, AccountState, Position, OrderRequest, TradeProposal
 
 
 class TestMarketSchemas:
@@ -190,4 +190,43 @@ class TestRiskSchemas:
                 risk_amount_money=100.0,
                 risk_percentage=0.60,  # Inválido: teto absoluto é 0.50%
             )
+
+    def test_trade_proposal_valid(self):
+        prop = TradeProposal(
+            decision_id=uuid4(),
+            strategy_id="STRAT_MOMENTUM_EURUSD",
+            symbol="EURUSD",
+            action="BUY",
+            entry_price=1.08500,
+            stop_loss=1.08200,
+            take_profit=1.09100,
+            target_risk_pct=0.25,
+        )
+        assert prop.action == "BUY"
+        assert prop.entry_price == 1.08500
+        assert prop.stop_loss == 1.08200
+        assert prop.target_risk_pct == 0.25
+
+    def test_trade_proposal_rejects_incoherent_buy_stop(self):
+        with pytest.raises(ValidationError, match="Stop Loss .* deve ser estritamente menor que entrada"):
+            TradeProposal(
+                decision_id=uuid4(),
+                strategy_id="STRAT_MOMENTUM_EURUSD",
+                symbol="EURUSD",
+                action="BUY",
+                entry_price=1.08500,
+                stop_loss=1.08600,
+            )
+
+    def test_trade_proposal_rejects_incoherent_sell_stop(self):
+        with pytest.raises(ValidationError, match="Stop Loss .* deve ser estritamente maior que entrada"):
+            TradeProposal(
+                decision_id=uuid4(),
+                strategy_id="STRAT_MOMENTUM_EURUSD",
+                symbol="EURUSD",
+                action="SELL",
+                entry_price=1.08500,
+                stop_loss=1.08400,
+            )
+
 

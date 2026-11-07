@@ -114,3 +114,4 @@ class MarketDataCollector:
     def get_detected_gaps(self) -> List[Dict[str, Any]]:
         """Retorna histórico de lacunas temporais identificadas."""
         return list(self._detected_gaps)
+

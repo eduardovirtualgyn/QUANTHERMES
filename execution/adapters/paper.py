@@ -401,3 +401,4 @@ class PaperTradingAdapter(TradingPlatformAdapter):
             price_executed=pos.current_price,
             comment="Stop Loss e Take Profit modificados",
         )
+

@@ -495,3 +495,4 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
             )
 
         return await _run_on_mt5_thread(_modify)
+
