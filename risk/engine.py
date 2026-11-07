@@ -232,3 +232,4 @@ class RiskEngine:
             max_slippage_points=proposal.max_slippage_points,
             rejection_reason=None,
         )
+

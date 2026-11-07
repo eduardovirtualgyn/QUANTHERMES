@@ -69,3 +69,4 @@ class TestCorrelationMonitor:
         assert ok is False
         assert "CORRELATION_LIMIT_EXCEEDED" in reason
         assert "GBPUSD" in reason
+

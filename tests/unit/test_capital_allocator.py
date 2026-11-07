@@ -73,3 +73,4 @@ class TestCapitalAllocator:
 
         with pytest.raises(ValueError, match="1.00%"):
             CapitalAllocator(max_portfolio_risk_pct=1.50)
+

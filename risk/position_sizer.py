@@ -78,3 +78,4 @@ class PositionSizer:
             vol_max=spec.volume_max,
             vol_step=spec.volume_step,
         )
+

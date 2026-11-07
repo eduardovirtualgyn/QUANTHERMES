@@ -105,3 +105,4 @@ class CapitalAllocator:
             return 0.0
 
         return allocated
+

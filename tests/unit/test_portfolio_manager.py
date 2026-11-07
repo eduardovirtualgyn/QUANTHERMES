@@ -205,3 +205,4 @@ class TestPortfolioManager:
         assert auth is not None
         assert auth.approved is False
         assert "CORRELATION_LIMIT_EXCEEDED" in auth.rejection_reason
+

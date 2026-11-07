@@ -309,3 +309,4 @@ class TestRiskEngine:
         )
         assert auth.approved is False
         assert "POSITION_SIZER" in auth.rejection_reason
+

@@ -161,3 +161,4 @@ class TestCircuitBreakerManager:
         ok, reason = manager.check_all(account)
         assert ok is False
         assert "CIRCUIT_BREAKER_EMERGENCY_DRAWDOWN" in reason
+

@@ -200,3 +200,4 @@ class CircuitBreakerManager:
             return False, reason
 
         return True, None
+

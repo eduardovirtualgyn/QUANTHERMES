@@ -140,3 +140,4 @@ class TestPositionReconciler:
         assert updated_broker_pos.stop_loss == 1.08250
 
         await adapter.disconnect()
+

@@ -4,6 +4,35 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [0.5.0-phase4] — 2026-11-07
+
+### Adicionado
+* **FASE 4 — Estratégias Quantitativas Concluída:**
+  * Implementação da biblioteca matemática de indicadores e features (`data/features/indicators.py`):
+    * `calc_sma`, `calc_ema`, `calc_atr`, `calc_bollinger_bands`, `calc_rsi`, `calc_macd`, `calc_adx`, `calc_zscore`, `calc_donchian`.
+    * Algoritmo determinístico de detecção de fractais de swing (`detect_swings`).
+    * Algoritmo objetivo de quebra de estrutura (`detect_bos_choch`).
+  * Implementação da classe base `BaseStrategy` (`strategies/base.py`):
+    * Validação formal de contratos, coerência de Stop Loss e corte obrigatório por Risco/Retorno mínimo (`min_rr_ratio`).
+  * Implementação das 7 famílias de estratégias quantitativas:
+    * `MicroMomentumScalpingStrategy` (`strategies/scalping/micro_momentum.py`): micro-momentum M1/M5, alinhamento EMA 9/21 e aceleração RSI (RR 1.5x).
+    * `VolatilityBreakoutStrategy` (`strategies/breakout/volatility_breakout.py`): expansão de volatilidade a partir de Bollinger Squeeze com rompimento Donchian (RR 2.0x).
+    * `MomentumSurgeStrategy` (`strategies/momentum/momentum_surge.py`): aceleração direcional com ADX > 25 e expansão do histograma MACD (RR 2.0x).
+    * `TrendPullbackStrategy` (`strategies/pullback/trend_pullback.py`): tendência EMA 50/200, retração na EMA 21 e rejeição por pavio (RR 2.0x).
+    * `StatisticalMeanReversionStrategy` (`strategies/mean_reversion/statistical_reversion.py`): mercados laterais (ADX < 25), desvio Z-Score >= 2.2 e retorno à média (RR 1.8x).
+    * `SMCStructureStrategy` (`strategies/smc/structure_break.py`): quebras determinísticas de estrutura BOS/CHoCH e varredura de liquidez (RR 2.5x).
+    * `MacroSwingStrategy` (`strategies/swing/macro_swing.py`): alinhamento triplo de médias H1/H4 (EMA 50, 100, 200) e RR assimétrico de 3.0x.
+  * Implementação do motor de backtesting histórico determinístico (`strategies/backtest/engine.py`):
+    * Simulação cronológica estrita com garantia contra viés futuro (*Anti-Lookahead Bias*).
+    * Integração com o `RiskEngine` e apuração de métricas de performance (Win Rate, Profit Factor, Drawdown, Sharpe, curva de equity).
+  * Criação de 21 novos testes automatizados:
+    * `tests/unit/test_indicators.py` (10 testes).
+    * `tests/unit/test_strategies.py` (8 testes).
+    * `tests/unit/test_backtest_engine.py` (3 testes).
+  * Total de testes automatizados do projeto elevado para **126 testes (100% PASS em 2.48s)**.
+
+---
+
 ## [0.4.0-phase3] — 2026-11-07
 
 ### Adicionado

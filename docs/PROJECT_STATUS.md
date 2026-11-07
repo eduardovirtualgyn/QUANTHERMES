@@ -1,8 +1,8 @@
 # Status do Projeto QUANT HERMES
 **Projeto:** QUANT HERMES — Autonomous Multi-Agent Quantitative Trading System  
 **Última Atualização:** 07 de Novembro de 2026  
-**Fase Atual:** FASE 3 — Risk e Portfolio (VALIDADO)  
-**Próxima Fase:** FASE 4 — Estratégias (Aguardando autorização)  
+**Fase Atual:** FASE 4 — Estratégias (VALIDADO)  
+**Próxima Fase:** FASE 5 — Inteligência Multiagente (Aguardando autorização)  
 
 ---
 
@@ -14,7 +14,7 @@
 | **FASE 1** | **Fundação** | **VALIDADO** | Estrutura de pacotes, schemas Pydantic V2, logging higienizado, loader com pisos invioláveis, Event Bus priorizado | `core/`, `intelligence/schemas/`, `tests/` |
 | **FASE 2** | **MT5 e Data Engine** | **VALIDADO** | `TradingPlatformAdapter` abstrato, `PaperTradingAdapter` em memória, `WindowsMT5Adapter` com fila serializada single-thread, `MarketDataCollector` com detecção de gaps, `HistoricalDataStore` Parquet com garantia anti-lookahead | `execution/adapters/`, `data/`, `tests/` (45/45 PASS) |
 | **FASE 3** | **Risk e Portfolio** | **VALIDADO** | `PositionSizer` (loss-per-lot, floor step), `CircuitBreakers` (perda diária/semanal/drawdown/fim de semana), `KillSwitch` (persistência em disco, liquidação compulsória), `RiskEngine` (autoridade soberana), `CorrelationMonitor`, `CapitalAllocator`, `PortfolioManager`, `PositionReconciler` | `risk/`, `portfolio/`, `tests/` (105/105 PASS) |
-| **FASE 4** | **Estratégias** | **NÃO INICIADO** | 7 famílias de estratégias quantitativas (Forex + XAUUSD), backtests individuais | Depende da Fase 3 |
+| **FASE 4** | **Estratégias** | **VALIDADO** | 7 famílias de estratégias quantitativas (Forex + XAUUSD), biblioteca matemática de indicadores, motor de backtesting histórico determinístico | `data/features/`, `strategies/`, `tests/` (126/126 PASS) |
 | **FASE 5** | **Inteligência Multiagente** | **NÃO INICIADO** | 8 agentes especializados, motor de consenso ponderado, LangGraph assíncrono | Depende da Fase 4 |
 | **FASE 6** | **Quantitative Engine e Learning** | **NÃO INICIADO** | HMM de regimes, XGBoost/LightGBM, calibração, Walk-Forward, Monte Carlo | Depende da Fase 5 |
 | **FASE 7** | **Execução Autônoma** | **NÃO INICIADO** | Integração ponta-a-ponta, paper trading, forward testing demo, reconciliação | Depende da Fase 6 |
@@ -70,3 +70,27 @@
    * Auto-correção de divergências de Stop Loss via `modify_position`.
 9. **Evidência de Qualidade Automatizada:**
    * **105 testes automatizados aprovados (100% PASS em 2.29s)** cobrindo todos os cenários de risco, limites e falhas.
+
+---
+
+## 4. Síntese dos Entregáveis da Fase 4 (Estratégias Quantitativas)
+
+1. **Biblioteca Matemática de Indicadores (`data/features/indicators.py`):**
+   * Implementações puras e vetorizadas via NumPy e Pandas para SMA, EMA, ATR, Bandas de Bollinger, RSI, MACD, ADX, Z-Score e Canais Donchian.
+   * Algoritmo determinístico de detecção de fractais de swing (`detect_swings`).
+   * Algoritmo 100% objetivo e reprodutível de Quebra de Estrutura e Mudança de Caráter (`detect_bos_choch`).
+2. **Interface Abstrata Soberana (`strategies/base.py`):**
+   * Classe `BaseStrategy` com validação de coerência de Stop Loss, razão Risco/Retorno mínima (`min_rr_ratio`) e emissão padronizada de `AgentSignal`.
+3. **As 7 Famílias de Estratégias Quantitativas Implementadas:**
+   * **Scalping (`strategies/scalping/micro_momentum.py`):** Aceleração de micro-momentum (M1/M5), alinhamento EMA 9/21, RSI dinâmico e RR 1.5x.
+   * **Volatility Breakout (`strategies/breakout/volatility_breakout.py`):** Compressão de volatilidade (Bollinger Squeeze) + expansão de range com rompimento de canais Donchian (RR 2.0x).
+   * **Momentum Surge (`strategies/momentum/momentum_surge.py`):** Filtro direcional ADX > 25, expansão de histograma MACD e inclinação de EMA 20 (RR 2.0x).
+   * **Trend Pullback (`strategies/pullback/trend_pullback.py`):** Alinhamento maior EMA 50/200, retração na EMA 21 e rejeição por pavio (RR 2.0x).
+   * **Statistical Mean Reversion (`strategies/mean_reversion/statistical_reversion.py`):** Regimes estritamente laterais (ADX < 25), desvios extremos de Z-Score $\ge 2.2$ e retorno à média (RR 1.8x).
+   * **SMC Structure Break (`strategies/smc/structure_break.py`):** Mapeamento objetivo de BOS/CHoCH e varredura de liquidez (RR 2.5x).
+   * **Macro Swing (`strategies/swing/macro_swing.py`):** Confluência tripla de médias de longo prazo (EMA 50, 100, 200), ADX e RR assimétrico de 3.0x.
+4. **Motor Determinístico de Backtesting (`strategies/backtest/engine.py`):**
+   * Simulação cronológica estrita sem viés de antecipação (*Anti-Lookahead Bias*).
+   * Avaliação integrada ao `RiskEngine` e consolidação de métricas: Win Rate %, Profit Factor, Max Drawdown %, Sharpe Ratio e curva de equity.
+5. **Evidência de Qualidade Automatizada:**
+   * **126 testes automatizados aprovados (100% PASS em 2.48s)**.
