@@ -5,3 +5,4 @@ Módulo: intelligence.langgraph
 from intelligence.langgraph.workflow import MultiAgentCycleResult, MultiAgentWorkflow
 
 __all__ = ["MultiAgentWorkflow", "MultiAgentCycleResult"]
+

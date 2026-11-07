@@ -63,3 +63,4 @@ DEFAULT_QUALITY_FACTORS: Dict[str, float] = {
     "AG07_ADVERSARIAL": 0.88,
     "AG08_PORTFOLIO": 0.92,
 }
+

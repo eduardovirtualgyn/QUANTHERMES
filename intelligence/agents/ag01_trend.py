@@ -137,3 +137,4 @@ class TrendIntelligenceAgent(BaseIntelligenceAgent):
             )
 
         return None
+

@@ -76,3 +76,4 @@ class BaseIntelligenceAgent(ABC):
         Analisa os dados multi-timeframe e retorna a recomendação analítica do agente.
         """
         pass
+

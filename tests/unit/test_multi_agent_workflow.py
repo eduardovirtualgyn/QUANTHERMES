@@ -62,3 +62,4 @@ class TestMultiAgentWorkflow:
         assert result.adversarial_debate is not None
         assert result.consensus is not None
         assert result.consensus.action in (SignalDirection.BUY, SignalDirection.SELL, SignalDirection.HOLD)
+

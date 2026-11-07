@@ -120,3 +120,4 @@ class MomentumBreakoutAgent(BaseIntelligenceAgent):
             )
 
         return None
+

@@ -219,3 +219,4 @@ class AdversarialResearchAgent(BaseIntelligenceAgent):
             )
 
         return None
+

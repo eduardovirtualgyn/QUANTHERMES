@@ -12,6 +12,7 @@ from core.models.market import MarketBar, MarketTick, TimeFrame
 from core.models.regime import MarketRegimeType, RegimeClassification
 from data.features.indicators import calc_adx, calc_atr, calc_ema, calc_zscore
 from intelligence.agents.base import BaseIntelligenceAgent
+from intelligence.regime.hmm_detector import HMMRegimeDetector
 
 
 class QuantitativeAgent(BaseIntelligenceAgent):
@@ -29,6 +30,7 @@ class QuantitativeAgent(BaseIntelligenceAgent):
         agent_id: str = "AG06_QUANT",
         quality_factor: float = 0.90,
         entropy_uncertainty_threshold: float = 0.80,
+        hmm_detector: Optional[HMMRegimeDetector] = None,
     ):
         super().__init__(
             agent_id=agent_id,
@@ -36,6 +38,7 @@ class QuantitativeAgent(BaseIntelligenceAgent):
             quality_factor=quality_factor,
         )
         self.entropy_uncertainty_threshold = entropy_uncertainty_threshold
+        self.hmm_detector = hmm_detector
 
     def classify_regime(
         self,
@@ -44,9 +47,12 @@ class QuantitativeAgent(BaseIntelligenceAgent):
         timeframe: str = "M15",
     ) -> RegimeClassification:
         """
-        Classifica o regime de mercado atual com base em retornos, volatilidade realizada e ADX.
-        Retorna RegimeClassification completo com distribuição de probabilidades e entropia.
+        Classifica o regime de mercado atual com base em HMM estocástico (se disponível e ajustado)
+        ou análise quantitativa de retornos, volatilidade realizada e ADX.
         """
+        if self.hmm_detector is not None and self.hmm_detector.is_fitted:
+            return self.hmm_detector.predict_regime(bars, symbol, timeframe)
+
         if len(bars) < 30:
             return RegimeClassification(
                 symbol=symbol,
@@ -185,3 +191,4 @@ class QuantitativeAgent(BaseIntelligenceAgent):
             )
 
         return None
+

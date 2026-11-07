@@ -118,3 +118,4 @@ class TestConsensusEngine:
 
         assert 0.0 < p_zero < p_mild < p_strong < p_extreme <= 1.0
         assert p_mild >= 0.60
+

@@ -127,3 +127,4 @@ class MarketStructureAgent(BaseIntelligenceAgent):
             )
 
         return None
+

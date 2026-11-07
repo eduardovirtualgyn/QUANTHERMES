@@ -67,3 +67,4 @@ class PlattScaler:
         # Mantém A estritamente positivo para garantir monotonicidade crescente
         self.param_a = max(0.5, float(a))
         self.param_b = float(b)
+

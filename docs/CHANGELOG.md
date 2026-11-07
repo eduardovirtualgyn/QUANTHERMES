@@ -4,6 +4,47 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [0.7.0-phase6] — 2026-11-07
+
+### Adicionado
+* **FASE 6 — Quantitative Engine e Learning Concluída:**
+  * Implementação do detector de regimes de mercado via HMM (`intelligence/regime/hmm_detector.py`):
+    * `HMMRegimeDetector` com `GaussianHMM` (via `hmmlearn.hmm`) com 4 estados latentes.
+    * Extração de features estocásticas: log-retornos, volatilidade realizada de 20 períodos, razão ATR e ADX.
+    * Mapeamento determinístico de estados para os regimes de mercado (`TREND_BULL_STRONG`, `TREND_BEAR_STRONG`, `RANGING_LOW_VOL`, `EXPANSION_HIGH_VOL`).
+    * Inferência de probabilidades posteriores com `predict_proba` e cálculo de incerteza estocástica via Entropia de Shannon normalizada.
+    * Fallback determinístico fail-safe caso o HMM falhe ou os dados sejam inferiores a 50 barras.
+  * Implementação do classificador supervisionado de Machine Learning (`intelligence/learning/classifier.py`):
+    * `QuantitativeMLClassifier` com suporte a XGBoost e LightGBM com calibração sigmoidal de probabilidade via `CalibratedClassifierCV`.
+    * Pipeline de 10 features quantitativas normalizadas (RSI, histograma MACD, distâncias EMA 20/50, ADX, Bollinger Band Width, Z-Score, retornos 1 e 5 barras, ATR normalizado).
+    * Rotulagem supervisionada por Triple-Barrier / Forward Returns ($H$ barras à frente, $k \times ATR$).
+    * Estrutura imutável de resultado `DirectionPrediction`.
+  * Implementação da validação purgada e com embargo Walk-Forward (`intelligence/learning/validation.py`):
+    * `PurgedWalkForwardValidator` em total aderência à metodologia de Marcos López de Prado (*Advances in Financial Machine Learning*).
+    * Purging de amostras com sobreposição temporal de alvos e embargo pós-teste (2% a 5%) para anular contaminação por autocorrelação serial.
+    * Relatório consolidado `ValidationReport` com verificação de portão constitucional inviolável (`min_profit_factor >= 1.30`, `win_rate >= 0.50`, `max_drawdown <= 0.08`, `min_trades >= 15`).
+  * Implementação do simulador de estresse estocástico Monte Carlo (`intelligence/learning/monte_carlo.py`):
+    * `MonteCarloStressTester` com reamostragem bootstrap com reposição (1.500 iterações).
+    * Cálculo formal da Probabilidade de Ruína $P(\text{Drawdown} \ge 8.00\%)$, VaR (95%, 99%), Expected Shortfall / CVaR 95%, expectância matemática e intervalo de confiança empírico a 95%.
+    * Rejeição automática de robustez para estratégias com risco de cauda gorda (*Fat-Tail Risk*).
+  * Implementação do registro governado de modelos e mecanismo de rollback atômico (`intelligence/learning/registry.py`):
+    * Conformidade estrita com a **Regra 15 da Constituição de Engenharia (`AGENTS.md`)**.
+    * Ciclo de vida em 5 estágios: `CANDIDATE`, `STAGING`, `PRODUCTION`, `ARCHIVED`, `REJECTED`.
+    * Integridade criptográfica via hash SHA-256 e persistência estruturada com `metadata.json`.
+    * Bloqueio compulsório via `PermissionError` para qualquer tentativa de promover modelos reprovados na validação purgada ou no teste Monte Carlo.
+    * Método atômico de reversão instantânea `rollback_production_model(symbol, reason)` com arquivamento do modelo anômalo e restauração do modelo estável anterior.
+  * Integração do HMM ao agente quantitativo AG06 (`intelligence/agents/ag06_quantitative.py`).
+  * Instalação e verificação no ambiente Python 3.11: `scikit-learn==1.9.1`, `xgboost==3.2.0`, `lightgbm==4.7.0`, `hmmlearn==0.3.3`, `joblib==1.6.0`, `scipy==1.14.1`.
+  * Criação de 22 novos testes automatizados:
+    * `tests/unit/test_hmm_detector.py` (5 testes).
+    * `tests/unit/test_ml_classifier.py` (6 testes).
+    * `tests/unit/test_purged_validation.py` (4 testes).
+    * `tests/unit/test_monte_carlo.py` (4 testes).
+    * `tests/unit/test_model_registry.py` (3 testes).
+  * Total de testes automatizados do projeto elevado para **161 testes (100% PASS em 7.66s)**.
+
+---
+
 ## [0.6.0-phase5] — 2026-11-07
 
 ### Adicionado

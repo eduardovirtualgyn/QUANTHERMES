@@ -142,3 +142,4 @@ class MultiAgentWorkflow:
             adversarial_debate=adversarial_result,
             consensus=consensus_decision,
         )
+

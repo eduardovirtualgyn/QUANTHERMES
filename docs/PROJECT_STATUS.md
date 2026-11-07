@@ -1,8 +1,8 @@
 # Status do Projeto QUANT HERMES
 **Projeto:** QUANT HERMES — Autonomous Multi-Agent Quantitative Trading System  
 **Última Atualização:** 07 de Novembro de 2026  
-**Fase Atual:** FASE 5 — Inteligência Multiagente (VALIDADO)  
-**Próxima Fase:** FASE 6 — Quantitative Engine e Learning (Aguardando autorização)  
+**Fase Atual:** FASE 6 — Quantitative Engine e Learning (VALIDADO)  
+**Próxima Fase:** FASE 7 — Execução Autônoma (Aguardando autorização)  
 
 ---
 
@@ -16,7 +16,7 @@
 | **FASE 3** | **Risk e Portfolio** | **VALIDADO** | `PositionSizer` (loss-per-lot, floor step), `CircuitBreakers` (perda diária/semanal/drawdown/fim de semana), `KillSwitch` (persistência em disco, liquidação compulsória), `RiskEngine` (autoridade soberana), `CorrelationMonitor`, `CapitalAllocator`, `PortfolioManager`, `PositionReconciler` | `risk/`, `portfolio/`, `tests/` (105/105 PASS) |
 | **FASE 4** | **Estratégias** | **VALIDADO** | 7 famílias de estratégias quantitativas (Forex + XAUUSD), biblioteca matemática de indicadores, motor de backtesting histórico determinístico | `data/features/`, `strategies/`, `tests/` (126/126 PASS) |
 | **FASE 5** | **Inteligência Multiagente** | **VALIDADO** | 8 agentes especializados (AG01 a AG08), matriz de pesos por regime, calibração Platt Scaler, motor de consenso ponderado e orquestrador de fluxo | `intelligence/`, `tests/` (139/139 PASS) |
-| **FASE 6** | **Quantitative Engine e Learning** | **NÃO INICIADO** | HMM de regimes, XGBoost/LightGBM, calibração, Walk-Forward, Monte Carlo | Depende da Fase 5 |
+| **FASE 6** | **Quantitative Engine e Learning** | **VALIDADO** | HMM de regimes estocásticos (GaussianHMM), classificador supervisionado XGBoost/LightGBM, Validação Purgada com Embargo (López de Prado), Simulação de Estresse Monte Carlo e Registro de Modelos com Rollback Atômico (Regra 15) | `intelligence/regime/`, `intelligence/learning/`, `tests/` (161/161 PASS) |
 | **FASE 7** | **Execução Autônoma** | **NÃO INICIADO** | Integração ponta-a-ponta, paper trading, forward testing demo, reconciliação | Depende da Fase 6 |
 | **FASE 8** | **Dashboard** | **NÃO INICIADO** | Painel operacional FastAPI + WebSockets, métricas em tempo real, controle de Kill Switch | Depende da Fase 7 |
 | **FASE 9** | **Preparação Linux** | **NÃO INICIADO** | Dockerização, scripts de VPS Linux, túnel seguro de execução, backup | Depende da Fase 8 |
@@ -116,3 +116,46 @@
    * Grafo de execução coordenando detecção de regime, inferência analítica paralela, investigação adversarial e deliberação de consenso.
 5. **Evidência de Qualidade Automatizada:**
    * **139 testes automatizados aprovados (100% PASS em 3.72s)**.
+
+---
+
+## 6. Síntese dos Entregáveis da Fase 6 (Quantitative Engine e Learning)
+
+1. **Detector de Regimes Estocásticos via HMM (`intelligence/regime/hmm_detector.py`):**
+   * Implementação de `GaussianHMM` (via `hmmlearn.hmm`) com 4 componentes latentes.
+   * Extração de features quantitativas: log-retornos, volatilidade realizada móvel (20 barras), ATR ratio e ADX 14.
+   * Mapeamento determinístico e interpretável de estados ocultos para `MarketRegimeType` (`TREND_BULL_STRONG`, `TREND_BEAR_STRONG`, `RANGING_LOW_VOL`, `EXPANSION_HIGH_VOL`).
+   * Cálculo de probabilidades a posteriori $P(S_t = k \mid X)$ e incerteza estocástica via Entropia de Shannon normalizada.
+   * Fallback heurístico fail-safe caso o HMM enfrente dados insuficientes ou falha de convergência.
+   * Integração bidirecional com o agente AG06 (`QuantitativeAgent`).
+
+2. **Classificador Supervisionado de Machine Learning (`intelligence/learning/classifier.py`):**
+   * Engine de classificação supervisionada para previsão direcional de mercado (`SignalDirection.BUY`, `SELL`, `HOLD`).
+   * Suporte nativo a `XGBoost` e `LightGBM` com calibração sigmoidal de probabilidades e fallback automático resiliente.
+   * Pipeline de 10 features técnicas padronizadas (RSI 14, histograma MACD, distâncias de EMA 20/50 normalizadas pelo ATR, ADX 14, Bollinger Band Width, Z-Score 20, retornos de 1 e 5 barras, ATR percentual).
+   * Rotulagem rigorosa por *Triple-Barrier Method* / Forward Returns em horizonte temporal parametrizável ($H$ barras, $k \times ATR$).
+
+3. **Validação Purgada e com Embargo Walk-Forward (`intelligence/learning/validation.py`):**
+   * Implementação estrita da metodologia de Marcos López de Prado (*Advances in Financial Machine Learning*).
+   * **Purging:** Eliminação sistemática de sobreposição temporal entre janelas de previsão e teste, erradicando viés de antecipação (*lookahead leakage*).
+   * **Embargo:** Margem de segurança pós-teste (2% a 5% da série) para eliminar contaminação por autocorrelação serial.
+   * Cálculo de métricas fora da amostra (OOS): Profit Factor OOS, Win Rate OOS, Sharpe Ratio OOS, Max Drawdown OOS.
+   * **Portão Constitucional:** Bloqueio compulsório de aprovação para produção caso o modelo apresente `profit_factor < 1.30`, `win_rate < 0.50`, `max_drawdown > 0.08` ou amostra OOS estatisticamente insuficiente.
+
+4. **Simulador de Estresse Monte Carlo (`intelligence/learning/monte_carlo.py`):**
+   * Bootstrapping não-paramétrico com reposição de distribuições de trades (500 a 10.000 iterações).
+   * Cálculo da **Probabilidade de Ruína** $P(\text{Drawdown} \ge 8.00\%)$ vinculada ao circuit breaker constitucional inviolável.
+   * Mensuração de cauda gorda (*Fat-Tails*): Value at Risk (VaR 95%, VaR 99%) e Conditional VaR / Expected Shortfall (CVaR 95%).
+   * Intervalo de confiança empírico (95%) para a curva de patrimônio terminal e cálculo de expectância matemática.
+   * Portão de Robustez: Rejeição automática se a probabilidade de ruína for $\ge 1.0\%$ ou se o drawdown no percentil 99 violar 8.00%.
+
+5. **Registro de Modelos e Mecanismo de Rollback Atômico (`intelligence/learning/registry.py`):**
+   * **Conformidade Estrita com a Regra 15 da Constituição de Engenharia (`AGENTS.md`):**
+     * *"Não implementar aprendizado online não supervisionado em produção: Modelos de produção só são substituídos após aprovação em testes de validação purgada fora da amostra com mecanismo de rollback."*
+   * Ciclo de vida estrito de 5 estágios: `CANDIDATE` $\rightarrow$ `STAGING` $\rightarrow$ `PRODUCTION` $\rightarrow$ `ARCHIVED` / `REJECTED`.
+   * Integridade criptográfica via hash SHA-256 gravado nos metadados auditáveis (`metadata.json`).
+   * Trava de promoção: Modelos reprovados na validação purgada ou no Monte Carlo lançam `PermissionError` e são rebaixados para `REJECTED`.
+   * **Rollback Atômico:** Método `rollback_production_model` reverte instantaneamente o modelo defeituoso para `REJECTED`, reativa a versão anterior `ARCHIVED` como `PRODUCTION` e atualiza os ponteiros de disco e cache em memória.
+
+6. **Evidência de Qualidade Automatizada:**
+   * **161 testes automatizados aprovados (100% PASS em 7.66s)** cobrindo todos os módulos do sistema, sem qualquer stub ou teste vazio.
