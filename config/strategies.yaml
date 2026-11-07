@@ -1,0 +1,57 @@
+# ==============================================================================
+# QUANT HERMES — CONFIGURAÇÃO DAS 7 FAMÍLIAS DE ESTRATÉGIAS (strategies.yaml)
+# ==============================================================================
+
+families:
+  scalping:
+    enabled: true
+    target_timeframes: ["M1", "M5"]
+    max_holding_time_minutes: 15
+    min_rr_ratio: 1.5
+    friction_veto_enabled: true
+    requires_llm: false
+
+  momentum:
+    enabled: true
+    target_timeframes: ["M5", "M15"]
+    min_rr_ratio: 2.0
+    requires_llm: false
+
+  breakout:
+    enabled: true
+    target_timeframes: ["M5", "M15", "H1"]
+    min_rr_ratio: 2.0
+    volatility_expansion_threshold: 1.8
+    requires_llm: false
+
+  pullback:
+    enabled: true
+    target_timeframes: ["M15", "H1"]
+    min_rr_ratio: 2.0
+    trend_alignment_required: true
+    requires_llm: false
+
+  smart_money_concepts:
+    enabled: true
+    target_timeframes: ["M15", "H1", "H4"]
+    min_rr_ratio: 2.5
+    require_bos_confirmation: true
+    require_liquidity_sweep: true
+    requires_llm: false
+
+  mean_reversion:
+    enabled: true
+    target_timeframes: ["M5", "M15"]
+    min_rr_ratio: 1.8
+    max_trend_adx: 25.0 # Bloqueia se mercado estiver em forte tendência
+    z_score_entry_threshold: 2.2
+    requires_llm: false
+
+  swing:
+    enabled: true
+    target_timeframes: ["H1", "H4"]
+    min_rr_ratio: 3.0
+    max_holding_time_days: 5
+    close_before_weekend: true
+    requires_llm: false
+

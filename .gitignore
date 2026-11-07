@@ -1,0 +1,49 @@
+# Ambientes Virtuais Python
+venv/
+.venv/
+env/
+ENV/
+
+# Arquivos de Configuração e Segredos (CRÍTICO)
+.env
+*.env.local
+*.key
+*.pem
+
+# Repositórios Externos de Auditoria (Transitórios da Fase 0)
+references/
+
+# Bytecode e Caches Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Logs e Dados Operacionais
+*.log
+logs/
+data/storage/*.parquet
+data/storage/*.duckdb
+data/storage/*.db
+data/historical/*.csv
+data/historical/*.parquet
+
+# MetaTrader 5 Arquivos Locais
+*.srv
+*.ini
+MQL5/Logs/
+Tester/
+
+# IDEs e Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.docker/
+

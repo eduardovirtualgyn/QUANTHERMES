@@ -1,0 +1,57 @@
+# ==============================================================================
+# QUANT HERMES — ESPECIFICAÇÃO DE INSTRUMENTOS (instruments.yaml)
+# ==============================================================================
+
+instruments:
+  EURUSD:
+    category: "forex_major"
+    base_currency: "EUR"
+    quote_currency: "USD"
+    broker_symbols: ["EURUSD", "EURUSD_i", "EURUSD.m", "EURUSD.r"]
+    timeframes: ["M1", "M5", "M15", "H1", "H4"]
+    max_spread_pips: 1.8
+    pip_size: 0.0001
+    point_size: 0.00001
+    min_volume: 0.01
+    max_volume: 10.0
+    volume_step: 0.01
+
+  GBPUSD:
+    category: "forex_major"
+    base_currency: "GBP"
+    quote_currency: "USD"
+    broker_symbols: ["GBPUSD", "GBPUSD_i", "GBPUSD.m", "GBPUSD.r"]
+    timeframes: ["M1", "M5", "M15", "H1", "H4"]
+    max_spread_pips: 2.5
+    pip_size: 0.0001
+    point_size: 0.00001
+    min_volume: 0.01
+    max_volume: 10.0
+    volume_step: 0.01
+
+  USDJPY:
+    category: "forex_major"
+    base_currency: "USD"
+    quote_currency: "JPY"
+    broker_symbols: ["USDJPY", "USDJPY_i", "USDJPY.m", "USDJPY.r"]
+    timeframes: ["M1", "M5", "M15", "H1", "H4"]
+    max_spread_pips: 2.0
+    pip_size: 0.01
+    point_size: 0.001
+    min_volume: 0.01
+    max_volume: 10.0
+    volume_step: 0.01
+
+  XAUUSD:
+    category: "metal"
+    base_currency: "XAU"
+    quote_currency: "USD"
+    broker_symbols: ["XAUUSD", "GOLD", "XAUUSD_i", "XAUUSD.m"]
+    timeframes: ["M1", "M5", "M15", "H1", "H4"]
+    max_spread_pips: 35.0
+    pip_size: 0.1
+    point_size: 0.01
+    min_volume: 0.01
+    max_volume: 5.0
+    volume_step: 0.01
+

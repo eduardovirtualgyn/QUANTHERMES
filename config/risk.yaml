@@ -1,0 +1,30 @@
+# ==============================================================================
+# QUANT HERMES — CONFIGURAÇÃO DO RISK ENGINE (risk.yaml)
+# NOTA: ESTES PARÂMETROS SÃO LIMITADOS PELOS PISOS INVIOLÁVEIS (_HARDCODED_MIN).
+# QUALQUER TENTATIVA DE AFROUXAR ESTES LIMITES ALÉM DO PISO SERÁ REJEITADA.
+# ==============================================================================
+
+per_trade:
+  risk_percentage: 0.25 # Risco padrão por operação: 0.25% da Equity
+  max_risk_percentage_hard_cap: 0.50 # Limite máximo absoluto
+  require_stop_loss: true
+  min_stop_distance_atr_multiplier: 1.0
+
+portfolio_limits:
+  max_aggregate_open_risk_pct: 1.00 # Máximo de 1% da conta em risco simultâneo
+  max_open_positions: 3
+  max_positions_per_symbol: 1
+  max_correlated_pairs_open: 2
+  max_correlation_threshold: 0.70
+
+drawdown_circuit_breakers:
+  daily_loss_limit_pct: 1.50 # Bloqueia novas ordens no dia
+  weekly_loss_limit_pct: 3.00 # Bloqueia novas ordens na semana
+  emergency_kill_switch_drawdown_pct: 8.00 # Fecha todas as posições e trava
+
+execution_filters:
+  max_spread_multiplier: 2.0 # Spread máximo vs média histórica recente
+  max_slippage_points: 30
+  friday_closing_utc_hour: 20 # Liquida posições intraday na sexta às 20h UTC
+  news_blackout_minutes: 15 # Bloqueio antes e depois de eventos de alto impacto
+

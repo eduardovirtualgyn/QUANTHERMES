@@ -1,0 +1,28 @@
+# ==============================================================================
+# QUANT HERMES — CONFIGURAÇÃO DE MODELOS DE INTELIGÊNCIA (models.yaml)
+# ==============================================================================
+
+regimes:
+  hmm:
+    n_states: 4
+    covariance_type: "full"
+    features: ["returns", "realized_volatility", "atr_ratio", "adx"]
+    min_confidence_threshold: 0.65
+    uncertainty_entropy_threshold: 0.80
+
+machine_learning:
+  classifier_type: "xgboost" # xgboost | lightgbm
+  walk_forward_splits: 5
+  purging_pct: 0.05
+  embargo_pct: 0.02
+  metric_target: "sharpe"
+  min_out_of_sample_profit_factor: 1.30
+
+llm_adversarial:
+  enabled: false # Opcional: mantido desabilitado por padrão
+  provider: "gemini" # gemini | openai | anthropic | deepseek
+  model: "gemini-1.5-pro"
+  temperature: 0.2
+  async_batch_interval_minutes: 60 # Nunca síncrono em scalping
+  timeout_seconds: 30
+

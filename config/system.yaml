@@ -1,0 +1,33 @@
+# ==============================================================================
+# QUANT HERMES — CONFIGURAÇÃO GERAL DO SISTEMA (system.yaml)
+# ==============================================================================
+
+system:
+  name: "QUANT_HERMES"
+  version: "0.1.0"
+  environment: "development" # development | paper_trading | live_demo
+  timezone: "UTC"
+  locale: "pt_BR"
+
+execution:
+  platform: "metatrader5"
+  mode: "paper" # paper | backtest | mt5_demo
+  single_thread_com: true
+  max_retry_attempts: 3
+  retry_delay_seconds: 0.5
+  order_timeout_ms: 10000
+
+network:
+  heartbeat_interval_seconds: 1.0
+  heartbeat_timeout_seconds: 5.0
+  reconnect_delay_seconds: 2.0
+  max_reconnect_attempts: 10
+
+logging:
+  level: "INFO"
+  format: "json"
+  sanitize_secrets: true
+  file_rotation: "daily"
+  max_bytes: 52428800 # 50 MB
+  backup_count: 7
+
