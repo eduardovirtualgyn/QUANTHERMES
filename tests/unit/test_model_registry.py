@@ -151,3 +151,4 @@ class TestModelRegistry:
         # Carrega modelo e valida integridade SHA256
         loaded = temp_registry.load_production_model("EURUSD")
         assert loaded is not None
+

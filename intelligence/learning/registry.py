@@ -394,3 +394,4 @@ class ModelRegistry:
             meta_dict = asdict(metadata)
             meta_dict["stage"] = metadata.stage.value
             json.dump(meta_dict, f, indent=2)
+

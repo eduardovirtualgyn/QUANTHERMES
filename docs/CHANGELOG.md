@@ -4,6 +4,29 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [0.8.0-phase7] — 2026-11-07
+
+### Adicionado
+* **FASE 7 — Execução Autônoma Concluída:**
+  * Implementação do Executor Soberano de Ordens (`execution/order_executor.py`):
+    * `OrderExecutor` com barreira inviolável: bloqueia com `PermissionError` qualquer solicitação de ordem sem `RiskAuthorization` aprovada ou com lote nulo.
+    * Proteção estrita por idempotência temporal (janela de 60 segundos) prevenindo reenvio duplicado de ordens.
+    * Validação formal de coerência entre `TradeProposal` e `RiskAuthorization`.
+  * Implementação do Gerenciador de Estado Operacional (`execution/state_manager.py`):
+    * `ExecutionStateManager` com escrita atômica em disco (`.tmp` -> rename atômico `os.replace`) em `data/storage/execution_state.json`.
+    * Rastreamento resiliente de posições ativas (`tracked_tickets`), métricas diárias e carimbo de data/hora UTC da última reconciliação.
+  * Implementação do Orquestrador Central Autônomo (`execution/orchestrator.py`):
+    * `AutonomousTradingOrchestrator` unificando de forma assíncrona todas as camadas do sistema: Market Data, Detecção de Regimes HMM, 7 Famílias de Estratégias Quantitativas, Inteligência Multiagente (AG01 a AG07), Consenso Ponderado (AG08), Gestão de Portfólio (com deduplicação de 60s e filtro de correlação cambial USD), Avaliação Soberana do Risk Engine, Despacho pelo OrderExecutor e Reconciliação Contínua.
+    * Rotina autônoma de simulação de pregão completo `run_simulation_session` com relatório estruturado `SessionSummary`.
+    * Parada graciosa (`shutdown`) com persistência do estado e desconexão segura.
+  * Criação de 12 novos testes automatizados:
+    * `tests/unit/test_order_executor.py` (4 testes).
+    * `tests/unit/test_state_manager.py` (4 testes).
+    * `tests/unit/test_orchestrator.py` (4 testes).
+  * Total de testes automatizados do projeto elevado para **173 testes (100% PASS em 19.01s)**.
+
+---
+
 ## [0.7.0-phase6] — 2026-11-07
 
 ### Adicionado

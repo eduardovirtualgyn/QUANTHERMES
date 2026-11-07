@@ -7,10 +7,12 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 from core.logger import get_logger
 from core.models.base import utc_now
-from execution.adapters.base import TradingPlatformAdapter
+
+if TYPE_CHECKING:
+    from execution.adapters.base import TradingPlatformAdapter
 
 logger = get_logger("risk.kill_switch")
 

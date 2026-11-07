@@ -162,3 +162,4 @@ class MonteCarloStressTester:
             mean_expectancy=round(expectancy, 2),
             confidence_interval_95={"lower": round(ci_lower, 2), "upper": round(ci_upper, 2)},
         )
+

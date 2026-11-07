@@ -66,3 +66,4 @@ class TestMonteCarloStressTester:
         report = tester.run_stress_test(trades)
         ci = report.confidence_interval_95
         assert ci["lower"] <= report.median_terminal_equity <= ci["upper"]
+

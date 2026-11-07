@@ -327,3 +327,4 @@ class HMMRegimeDetector:
             entropy=0.50,
             is_uncertain=active_regime == MarketRegimeType.UNCERTAIN_TRANSITION,
         )
+
