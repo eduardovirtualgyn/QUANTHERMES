@@ -137,3 +137,4 @@ class SMCStructureStrategy(BaseStrategy):
             )
 
         return None
+

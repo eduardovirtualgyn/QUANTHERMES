@@ -140,3 +140,4 @@ class TrendPullbackStrategy(BaseStrategy):
                     )
 
         return None
+

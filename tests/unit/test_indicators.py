@@ -124,3 +124,4 @@ class TestIndicators:
         # Evento deve ser de rompimento de alta (CHOCH_BULLISH ou BOS_BULLISH)
         assert "BULLISH" in events[0]["type"]
         assert events[0]["broken_level"] == 15.0
+

@@ -4,6 +4,32 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.
 
 ---
 
+## [0.6.0-phase5] — 2026-11-07
+
+### Adicionado
+* **FASE 5 — Inteligência Multiagente Concluída:**
+  * Implementação da classe base `BaseIntelligenceAgent` (`intelligence/agents/base.py`).
+  * Implementação dos 8 Agentes Especializados de Inteligência:
+    * `TrendIntelligenceAgent` (`intelligence/agents/ag01_trend.py`): alinhamento multi-timeframe (M15/H1), EMAs (20, 50, 200) e força ADX.
+    * `MarketStructureAgent` (`intelligence/agents/ag02_structure.py`): quebras determinísticas BOS/CHoCH e zonas de liquidez.
+    * `MomentumBreakoutAgent` (`intelligence/agents/ag03_momentum.py`): compressão de volatilidade e expansão de range com rompimento Donchian.
+    * `MeanReversionAgent` (`intelligence/agents/ag04_mean_reversion.py`): desvios extremos Z-Score $\ge 2.0$, exaustão RSI e veto estrito em tendências fortes (ADX $\ge 25$).
+    * `GoldMacroAgent` (`intelligence/agents/ag05_gold_macro.py`): análise especializada de XAUUSD, correlação DXY e filtro de blackout de notícias macroeconômicas de alto impacto (15 min antes e depois).
+    * `QuantitativeAgent` (`intelligence/agents/ag06_quantitative.py`): classificação estocástica de regimes (`RegimeClassification`), probabilidades a posteriori e cálculo de incerteza via Entropia de Shannon.
+    * `AdversarialResearchAgent` (`intelligence/agents/ag07_adversarial.py`): investigação dialética Bull vs Bear, detecção de armadilhas de liquidez e penalidade de risco.
+    * `ConsensusEngine` (`intelligence/consensus/engine.py`): deliberação ponderada pela equação $\text{Score} = \sum (w_i(R) \times D_i \times C_i \times Q_i)$.
+  * Implementação do calibrador probabilístico de Platt (`intelligence/calibration/platt_scaler.py`):
+    * Transformação sigmoidal de pontuações de convicção em probabilidades estatisticamente calibradas.
+  * Implementação da matriz de pesos dinâmicos por regime (`intelligence/consensus/weights.py`).
+  * Implementação do orquestrador de fluxos multiagente (`intelligence/langgraph/workflow.py`).
+  * Criação de 13 novos testes automatizados:
+    * `tests/unit/test_agents.py` (7 testes).
+    * `tests/unit/test_consensus_engine.py` (5 testes).
+    * `tests/unit/test_multi_agent_workflow.py` (1 teste).
+  * Total de testes automatizados do projeto elevado para **139 testes (100% PASS em 3.72s)**.
+
+---
+
 ## [0.5.0-phase4] — 2026-11-07
 
 ### Adicionado

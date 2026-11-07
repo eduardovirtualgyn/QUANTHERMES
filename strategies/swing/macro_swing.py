@@ -136,3 +136,4 @@ class MacroSwingStrategy(BaseStrategy):
             )
 
         return None
+

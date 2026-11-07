@@ -124,3 +124,4 @@ class MicroMomentumScalpingStrategy(BaseStrategy):
             )
 
         return None
+

@@ -1,8 +1,8 @@
 # Status do Projeto QUANT HERMES
 **Projeto:** QUANT HERMES — Autonomous Multi-Agent Quantitative Trading System  
 **Última Atualização:** 07 de Novembro de 2026  
-**Fase Atual:** FASE 4 — Estratégias (VALIDADO)  
-**Próxima Fase:** FASE 5 — Inteligência Multiagente (Aguardando autorização)  
+**Fase Atual:** FASE 5 — Inteligência Multiagente (VALIDADO)  
+**Próxima Fase:** FASE 6 — Quantitative Engine e Learning (Aguardando autorização)  
 
 ---
 
@@ -15,7 +15,7 @@
 | **FASE 2** | **MT5 e Data Engine** | **VALIDADO** | `TradingPlatformAdapter` abstrato, `PaperTradingAdapter` em memória, `WindowsMT5Adapter` com fila serializada single-thread, `MarketDataCollector` com detecção de gaps, `HistoricalDataStore` Parquet com garantia anti-lookahead | `execution/adapters/`, `data/`, `tests/` (45/45 PASS) |
 | **FASE 3** | **Risk e Portfolio** | **VALIDADO** | `PositionSizer` (loss-per-lot, floor step), `CircuitBreakers` (perda diária/semanal/drawdown/fim de semana), `KillSwitch` (persistência em disco, liquidação compulsória), `RiskEngine` (autoridade soberana), `CorrelationMonitor`, `CapitalAllocator`, `PortfolioManager`, `PositionReconciler` | `risk/`, `portfolio/`, `tests/` (105/105 PASS) |
 | **FASE 4** | **Estratégias** | **VALIDADO** | 7 famílias de estratégias quantitativas (Forex + XAUUSD), biblioteca matemática de indicadores, motor de backtesting histórico determinístico | `data/features/`, `strategies/`, `tests/` (126/126 PASS) |
-| **FASE 5** | **Inteligência Multiagente** | **NÃO INICIADO** | 8 agentes especializados, motor de consenso ponderado, LangGraph assíncrono | Depende da Fase 4 |
+| **FASE 5** | **Inteligência Multiagente** | **VALIDADO** | 8 agentes especializados (AG01 a AG08), matriz de pesos por regime, calibração Platt Scaler, motor de consenso ponderado e orquestrador de fluxo | `intelligence/`, `tests/` (139/139 PASS) |
 | **FASE 6** | **Quantitative Engine e Learning** | **NÃO INICIADO** | HMM de regimes, XGBoost/LightGBM, calibração, Walk-Forward, Monte Carlo | Depende da Fase 5 |
 | **FASE 7** | **Execução Autônoma** | **NÃO INICIADO** | Integração ponta-a-ponta, paper trading, forward testing demo, reconciliação | Depende da Fase 6 |
 | **FASE 8** | **Dashboard** | **NÃO INICIADO** | Painel operacional FastAPI + WebSockets, métricas em tempo real, controle de Kill Switch | Depende da Fase 7 |
@@ -94,3 +94,25 @@
    * Avaliação integrada ao `RiskEngine` e consolidação de métricas: Win Rate %, Profit Factor, Max Drawdown %, Sharpe Ratio e curva de equity.
 5. **Evidência de Qualidade Automatizada:**
    * **126 testes automatizados aprovados (100% PASS em 2.48s)**.
+
+---
+
+## 5. Síntese dos Entregáveis da Fase 5 (Inteligência Multiagente)
+
+1. **Os 8 Agentes Especializados de Inteligência (`intelligence/agents/`):**
+   * **AG01 — TREND INTELLIGENCE (`ag01_trend.py`):** Análise multi-timeframe (M15/H1), alinhamento de médias exponenciais, força direcional ADX e confluência estrutural.
+   * **AG02 — MARKET STRUCTURE INTELLIGENCE (`ag02_structure.py`):** Mapeamento objetivo de BOS, CHoCH e varredura de liquidez (RR 2.5x).
+   * **AG03 — MOMENTUM AND BREAKOUT (`ag03_momentum.py`):** Compressão de volatilidade (Bollinger Squeeze), expansão de range e rompimento Donchian.
+   * **AG04 — MEAN REVERSION (`ag04_mean_reversion.py`):** Desvios estatísticos Z-Score $\ge 2.0$, exaustão de RSI e veto estrito em tendências fortes (ADX $\ge 25$).
+   * **AG05 — GOLD AND MACRO INTELLIGENCE (`ag05_gold_macro.py`):** Especialização em XAUUSD, correlação com DXY e filtro de blackout de notícias macroeconômicas de alto impacto (15 minutos antes e depois).
+   * **AG06 — QUANTITATIVE INTELLIGENCE (`ag06_quantitative.py`):** Classificação de regimes estocásticos (`RegimeClassification`), probabilidades a posteriori e cálculo de incerteza via Entropia de Shannon.
+   * **AG07 — ADVERSARIAL RESEARCH (`ag07_adversarial.py`):** Investigação dialética (Advogado do Diabo: Bull vs Bear), detecção de armadilhas institucionais e cálculo do fator de penalidade de risco.
+   * **AG08 — PORTFOLIO INTELLIGENCE (`intelligence/consensus/engine.py`):** Motor de consenso governado pela equação $\text{Score} = \sum (w_i(R) \times D_i \times C_i \times Q_i)$.
+2. **Calibração Probabilística de Platt (`intelligence/calibration/platt_scaler.py`):**
+   * Mapeamento sigmoidal de pontuações de convicção em probabilidades estatisticamente calibradas $P(\text{Sucesso} \mid \text{Score})$.
+3. **Matriz de Pesos Dinâmica por Regime (`intelligence/consensus/weights.py`):**
+   * Calibração de pesos $w_i(R)$ específicos para cada estado de mercado e fatores de qualidade histórica fora da amostra $Q_i$.
+4. **Orquestrador de Fluxo Multiagente (`intelligence/langgraph/workflow.py`):**
+   * Grafo de execução coordenando detecção de regime, inferência analítica paralela, investigação adversarial e deliberação de consenso.
+5. **Evidência de Qualidade Automatizada:**
+   * **139 testes automatizados aprovados (100% PASS em 3.72s)**.

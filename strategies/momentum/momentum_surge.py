@@ -131,3 +131,4 @@ class MomentumSurgeStrategy(BaseStrategy):
             )
 
         return None
+

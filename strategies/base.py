@@ -117,3 +117,4 @@ class BaseStrategy(ABC):
         Retorna AgentSignal se uma oportunidade satisfatória for identificada, ou None.
         """
         pass
+

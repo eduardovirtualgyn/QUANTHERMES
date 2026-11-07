@@ -186,3 +186,4 @@ class TestStrategies:
         assert StatisticalMeanReversionStrategy().analyze(bars, "EURUSD", TimeFrame.M5) is None
         assert SMCStructureStrategy().analyze(bars, "EURUSD", TimeFrame.M5) is None
         assert MacroSwingStrategy().analyze(bars, "EURUSD", TimeFrame.M5) is None
+

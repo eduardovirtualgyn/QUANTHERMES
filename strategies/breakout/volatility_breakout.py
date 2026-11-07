@@ -133,3 +133,4 @@ class VolatilityBreakoutStrategy(BaseStrategy):
             )
 
         return None
+

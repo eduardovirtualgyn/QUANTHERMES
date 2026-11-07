@@ -153,3 +153,4 @@ class StatisticalMeanReversionStrategy(BaseStrategy):
             )
 
         return None
+

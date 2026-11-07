@@ -261,3 +261,4 @@ def detect_bos_choch(
             last_swing_low_price = None
 
     return events
+

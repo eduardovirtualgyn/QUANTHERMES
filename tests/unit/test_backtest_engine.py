@@ -133,3 +133,4 @@ class TestBacktestEngine:
         strat = VolatilityBreakoutStrategy()
         result = engine.run(strat, backtest_bars, eurusd_spec)
         assert result.total_trades == 0  # Todas as ordens foram recusadas pelo Risk Engine
+
