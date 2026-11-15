@@ -4,7 +4,9 @@ Módulo: portfolio.manager
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -39,14 +41,52 @@ class PortfolioManager:
         allocator: Optional[CapitalAllocator] = None,
         correlation_monitor: Optional[CorrelationMonitor] = None,
         dedup_cooldown_seconds: int = 60,
+        cooldown_store_path: Optional[Path] = None,
     ):
         self.risk_engine = risk_engine
         self.allocator = allocator or CapitalAllocator()
         self.correlation_monitor = correlation_monitor or CorrelationMonitor()
         self.dedup_cooldown_seconds = dedup_cooldown_seconds
+        self.cooldown_store_path = cooldown_store_path
 
         # Registro de deduplicação: (symbol, action) -> timestamp
         self._recent_proposals: Dict[Tuple[str, str], datetime] = {}
+        if self.cooldown_store_path:
+            self._load_cooldown_state()
+
+    def _load_cooldown_state(self) -> None:
+        """Carrega e purga entradas de cooldown persistidas no disco (DEBT-P2-02)."""
+        if not self.cooldown_store_path or not self.cooldown_store_path.exists():
+            return
+        try:
+            with open(self.cooldown_store_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            now = utc_now()
+            for key_str, iso_time in data.items():
+                if ":" in key_str:
+                    sym, act = key_str.split(":", 1)
+                    t = datetime.fromisoformat(iso_time)
+                    if (now - t).total_seconds() < self.dedup_cooldown_seconds:
+                        self._recent_proposals[(sym, act)] = t
+        except Exception as e:
+            logger.warning("Falha ao carregar cooldown de portfólio persistido", extra={"error": str(e)})
+
+    def _persist_cooldown_state(self) -> None:
+        """Persiste atomicamente o estado de cooldown em disco."""
+        if not self.cooldown_store_path:
+            return
+        try:
+            self.cooldown_store_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = self.cooldown_store_path.with_suffix(".tmp")
+            payload = {
+                f"{k[0]}:{k[1]}": v.isoformat()
+                for k, v in self._recent_proposals.items()
+            }
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            temp_path.replace(self.cooldown_store_path)
+        except Exception as e:
+            logger.error("Falha ao persistir cooldown de portfólio", extra={"error": str(e)})
 
     def _is_duplicate(self, symbol: str, action: str, now: datetime) -> bool:
         """Verifica se uma proposta idêntica foi gerada dentro da janela de cooldown."""
@@ -57,9 +97,10 @@ class PortfolioManager:
         return False
 
     def _record_proposal(self, symbol: str, action: str, now: datetime) -> None:
-        """Registra a geração da proposta para deduplicação."""
+        """Registra a geração da proposta para deduplicação e persiste em disco."""
         key = (symbol.upper(), action.upper())
         self._recent_proposals[key] = now
+        self._persist_cooldown_state()
 
     def process_consensus_decision(
         self,

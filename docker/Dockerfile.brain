@@ -1,0 +1,73 @@
+# ==============================================================================
+# QUANT HERMES — DOCKERFILE DE PRODUÇÃO DO NÓ ANALÍTICO (LINUX BRAIN)
+# Arquitetura: Python 3.11-slim com Usuário Não-Root e Otimizações Científicas
+# ==============================================================================
+
+FROM python:3.11-slim AS builder
+
+# Evita criação de arquivos .pyc e força flushing imediato de logs
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /install
+
+# Instala ferramentas essenciais de compilação para pacotes numéricos (XGBoost / LightGBM)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copia e instala as dependências do projeto
+COPY requirements.txt pyproject.toml ./
+RUN pip install --no-cache-dir --prefix=/install/deps -r requirements.txt
+
+
+# ------------------------------------------------------------------------------
+# Imagem Final Minimalista e Segura
+# ------------------------------------------------------------------------------
+FROM python:3.11-slim AS runtime
+
+LABEL maintainer="QUANT HERMES Engineering" \
+      version="1.0.0" \
+      description="Nó Analítico Autônomo e Motor de Risco do QUANT HERMES"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PORT=8000 \
+    HERMES_ENV=production
+
+WORKDIR /app
+
+# Instala dependências de runtime do sistema (OpenMP para LightGBM e curl para healthchecks)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copia pacotes Python pré-compilados do estágio builder
+COPY --from=builder /install/deps /usr/local
+
+# Cria usuário e grupo não-root 'hermes' para segurança estrita
+RUN groupadd -g 1000 hermes && \
+    useradd -u 1000 -g hermes -s /bin/bash -m hermes && \
+    mkdir -p /app/data/storage /app/data/parquet /app/logs && \
+    chown -R hermes:hermes /app
+
+# Copia o código-fonte da aplicação
+COPY --chown=hermes:hermes . /app
+
+# Altera para o usuário restrito
+USER hermes
+
+# Exposição da porta da API e Dashboard de Monitoramento
+EXPOSE 8000
+
+# Verificação contínua de saúde do contêiner
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+# Ponto de entrada padrão: servidor de monitoramento e orquestração autônoma
+CMD ["python", "-m", "uvicorn", "monitoring.server:create_monitoring_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

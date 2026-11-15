@@ -1,0 +1,71 @@
+version: '3.8'
+
+# ==============================================================================
+# QUANT HERMES — ORQUESTRAÇÃO DE PRODUÇÃO EM DOCKER COMPOSE
+# ==============================================================================
+services:
+  hermes-brain:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.brain
+    image: hermes-quant/brain:1.0.0
+    container_name: hermes-quant-brain
+    restart: unless-stopped
+    env_file:
+      - ../.env.production
+    environment:
+      - HERMES_ENV=production
+      - HERMES_OPERATOR_TOKEN=${HERMES_OPERATOR_TOKEN:-HERMES_RISK_OVERRIDE_2026}
+      - HERMES_GATEWAY_URL=${HERMES_GATEWAY_URL:-http://hermes-gateway:8001}
+      - HERMES_GATEWAY_TOKEN=${HERMES_GATEWAY_TOKEN:-HERMES_GATEWAY_TOKEN_DEFAULT}
+    ports:
+      - "8000:8000"
+    volumes:
+      - hermes_data_storage:/app/data/storage
+      - hermes_data_parquet:/app/data/parquet
+      - hermes_logs:/app/logs
+    networks:
+      - hermes-internal-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Serviço opcional do Gateway (emulado ou bridge Windows)
+  hermes-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.brain
+    image: hermes-quant/gateway:1.0.0
+    container_name: hermes-quant-gateway
+    restart: unless-stopped
+    command: ["python", "-m", "uvicorn", "execution.gateway_server:app", "--host", "0.0.0.0", "--port", "8001"]
+    env_file:
+      - ../.env.production
+    environment:
+      - HERMES_ENV=production
+      - HERMES_GATEWAY_TOKEN=${HERMES_GATEWAY_TOKEN:-HERMES_GATEWAY_TOKEN_DEFAULT}
+    ports:
+      - "8001:8001"
+    networks:
+      - hermes-internal-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+volumes:
+  hermes_data_storage:
+    name: hermes_data_storage
+  hermes_data_parquet:
+    name: hermes_data_parquet
+  hermes_logs:
+    name: hermes_logs
+
+networks:
+  hermes-internal-net:
+    name: hermes-internal-net
+    driver: bridge
+

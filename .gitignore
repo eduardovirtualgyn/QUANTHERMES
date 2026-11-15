@@ -29,6 +29,7 @@ logs/
 data/storage/*.parquet
 data/storage/*.duckdb
 data/storage/*.db
+data/storage/*.json
 data/historical/*.csv
 data/historical/*.parquet
 

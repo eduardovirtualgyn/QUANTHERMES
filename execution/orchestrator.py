@@ -170,6 +170,11 @@ class AutonomousTradingOrchestrator:
         if saved_state:
             logger.info("Estado prévio restaurado", extra={"tracked": len(saved_state.tracked_tickets)})
 
+        # Executa protocolo de recuperação pós-crash de ordens não resolvidas no SQLite
+        recovered = await self.order_executor.recover_unresolved_orders()
+        if recovered:
+            logger.info("Ordens recuperadas no startup pelo OrderExecutor", extra={"count": len(recovered)})
+
         # Executa reconciliação de inicialização
         await self.run_reconciliation_cycle()
 

@@ -1,0 +1,57 @@
+# ==============================================================================
+# QUANT HERMES — ORQUESTRAÇÃO DE CONTÊINERES PRODUÇÃO (VPS LINUX)
+# ==============================================================================
+
+version: "3.8"
+
+services:
+  # ----------------------------------------------------------------------------
+  # Nó Analítico e de Governança de Risco (Linux Brain)
+  # ----------------------------------------------------------------------------
+  hermes-brain:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.brain
+    image: hermes-quant/brain:1.0.0
+    container_name: hermes-brain
+    restart: unless-stopped
+    ports:
+      - "${MONITORING_BIND_IP:-127.0.0.1}:${MONITORING_PORT:-8000}:8000"
+    environment:
+      - HERMES_ENV=production
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - HERMES_OPERATOR_TOKEN=${HERMES_OPERATOR_TOKEN:-HERMES_RISK_OVERRIDE_2026}
+      - HERMES_BRIDGE_TOKEN=${HERMES_BRIDGE_TOKEN:-HERMES_BRIDGE_SECRET_2026}
+      - MT5_GATEWAY_URL=${MT5_GATEWAY_URL:-http://host.docker.internal:8001}
+    volumes:
+      - hermes-storage:/app/data/storage
+      - hermes-parquet:/app/data/parquet
+      - hermes-logs:/app/logs
+    networks:
+      - hermes-network
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4096M
+        reservations:
+          cpus: "1.0"
+          memory: 1024M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  hermes-storage:
+    name: hermes-storage
+  hermes-parquet:
+    name: hermes-parquet
+  hermes-logs:
+    name: hermes-logs
+
+networks:
+  hermes-network:
+    name: hermes-network
+    driver: bridge

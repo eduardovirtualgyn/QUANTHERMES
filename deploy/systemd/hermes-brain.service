@@ -1,0 +1,60 @@
+# ==============================================================================
+# QUANT HERMES — SYSTEMD SERVICE MANIFEST
+# Caminho de Instalação: /etc/systemd/system/hermes-brain.service
+# Comandos:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable hermes-brain
+#   sudo systemctl start hermes-brain
+#   sudo journalctl -u hermes-brain -f
+# ==============================================================================
+
+[Unit]
+Description=QUANT HERMES — Autonomous Multi-Agent Quantitative Trading Brain
+After=network.target network-online.target time-sync.target
+Wants=network-online.target time-sync.target
+Documentation=https://github.com/hermes-quant/core
+
+[Service]
+Type=simple
+User=hermes
+Group=hermes
+WorkingDirectory=/opt/hermes-quant
+
+# Arquivo de configuração de segredos estrito
+EnvironmentFile=/opt/hermes-quant/.env.production
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="PYTHONPATH=/opt/hermes-quant"
+
+# Verificação pré-voo antes do arranque
+ExecStartPre=/opt/hermes-quant/.venv/bin/python deploy/preflight_check.py
+
+# Comando principal de execução
+ExecStart=/opt/hermes-quant/.venv/bin/python -m uvicorn monitoring.server:app --host 0.0.0.0 --port 8000
+
+# Política de Recuperação de Falhas e Alta Disponibilidade
+Restart=always
+RestartSec=5s
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+
+# Isolamento e Hardening de Segurança no Linux
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hermes-quant/data /opt/hermes-quant/logs
+PrivateTmp=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+
+# Limites de Recursos Operacionais
+LimitNOFILE=65535
+MemoryMax=4G
+CPUQuota=200%
+
+# Gerenciamento de Sinais
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target
