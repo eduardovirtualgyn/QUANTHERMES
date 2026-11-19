@@ -63,6 +63,19 @@ dev = [
     "mypy>=1.10.0"
 ]
 
+[tool.setuptools.packages.find]
+include = [
+    "core*",
+    "data*",
+    "deploy*",
+    "execution*",
+    "intelligence*",
+    "monitoring*",
+    "portfolio*",
+    "risk*",
+    "strategies*",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

@@ -16,11 +16,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install test dependencies without a live terminal
+        shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
           python -m pip uninstall -y MetaTrader5
-        shell: pwsh
 
       - name: Offline suite
         env:
