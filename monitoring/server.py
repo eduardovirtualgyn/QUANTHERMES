@@ -15,11 +15,12 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from core.logger import get_logger
+from core.secrets import require_env, tokens_equal
 from monitoring.telemetry import TelemetryProvider
 
 logger = get_logger("monitoring.server")
@@ -70,7 +71,10 @@ class WebSocketConnectionManager:
             self.disconnect(conn)
 
 
-def create_monitoring_app(provider: Optional[TelemetryProvider] = None) -> FastAPI:
+def create_monitoring_app(
+    provider: Optional[TelemetryProvider] = None,
+    operator_token: Optional[str] = None,
+) -> FastAPI:
     """
     Fábrica da aplicação FastAPI para o Dashboard e Monitoramento do QUANT HERMES.
     """
@@ -82,6 +86,21 @@ def create_monitoring_app(provider: Optional[TelemetryProvider] = None) -> FastA
 
     telemetry = provider or TelemetryProvider()
     ws_manager = WebSocketConnectionManager()
+    expected_token = operator_token.strip() if operator_token else require_env("HERMES_OPERATOR_TOKEN")
+
+    def require_operator(authorization: Optional[str] = Header(None)) -> None:
+        """Exige Bearer token em todo endpoint que altera estado."""
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token de operador ausente",
+            )
+        presented = authorization.split("Bearer ", 1)[1].strip()
+        if not tokens_equal(presented, expected_token):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Token de operador inválido",
+            )
 
     # Injeta nas dependências do app
     app.state.telemetry = telemetry
@@ -111,7 +130,7 @@ def create_monitoring_app(provider: Optional[TelemetryProvider] = None) -> FastA
         """Consulta status dos Circuit Breakers e Kill Switch."""
         return telemetry.get_risk_status()
 
-    @app.post("/api/v1/risk/kill-switch/engage", tags=["Risco"])
+    @app.post("/api/v1/risk/kill-switch/engage", tags=["Risco"], dependencies=[Depends(require_operator)])
     async def engage_kill_switch(payload: KillSwitchEngageRequest) -> Dict[str, Any]:
         """Aciona a trava de emergência global e liquida ordens."""
         if not telemetry.risk_engine:
@@ -141,18 +160,13 @@ def create_monitoring_app(provider: Optional[TelemetryProvider] = None) -> FastA
             "message": f"Kill Switch ativado: {payload.reason}",
         }
 
-    @app.post("/api/v1/risk/kill-switch/disengage", tags=["Risco"])
+    @app.post("/api/v1/risk/kill-switch/disengage", tags=["Risco"], dependencies=[Depends(require_operator)])
     async def disengage_kill_switch(payload: KillSwitchDisengageRequest) -> Dict[str, Any]:
         """Desarma a trava de emergência global com token seguro de operador."""
         if not telemetry.risk_engine:
             raise HTTPException(status_code=503, detail="Risk Engine não inicializado")
 
-        expected_token = os.getenv("HERMES_OPERATOR_TOKEN", "HERMES_RISK_OVERRIDE_2026")
-        if payload.operator_token != expected_token:
-            raise HTTPException(status_code=403, detail="Token de operador inválido para desarme")
-
-        expected_token = os.getenv("HERMES_OPERATOR_TOKEN", "HERMES_RISK_OVERRIDE_2026")
-        if payload.operator_token != expected_token:
+        if not tokens_equal(payload.operator_token, expected_token):
             raise HTTPException(status_code=403, detail="Token de operador inválido para desarme")
 
         ks = telemetry.risk_engine.kill_switch
@@ -215,7 +229,7 @@ def create_monitoring_app(provider: Optional[TelemetryProvider] = None) -> FastA
             for m in models
         ]
 
-    @app.post("/api/v1/models/rollback", tags=["Machine Learning"])
+    @app.post("/api/v1/models/rollback", tags=["Machine Learning"], dependencies=[Depends(require_operator)])
     async def rollback_model(payload: ModelRollbackRequest) -> Dict[str, Any]:
         """Aciona rollback atômico para a versão de produção anterior."""
         restored = telemetry.model_registry.rollback_production_model(

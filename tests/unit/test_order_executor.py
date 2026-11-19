@@ -81,6 +81,10 @@ class TestOrderExecutor:
         assert result.order_ticket > 0
         assert result.volume_executed == 0.10
         assert len(executor.get_execution_history()) == 1
+        stored = executor.store.get_intent_by_key(result.idempotency_key)
+        assert stored is not None
+        assert stored["requested_lot"] == approved_auth.authorized_lot
+        assert stored["requested_lot"] != proposal.target_risk_pct
 
     @pytest.mark.asyncio
     async def test_idempotency_blocks_duplicate_order_submission(self, executor):

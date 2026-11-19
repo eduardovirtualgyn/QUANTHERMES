@@ -30,6 +30,8 @@ class ExecutionState:
     tracked_tickets: List[int] = field(default_factory=list)
     daily_trades_count: int = 0
     daily_realized_pnl: float = 0.0
+    peak_equity: float = 0.0
+    current_drawdown_pct: float = 0.0
     last_reconciliation_utc: Optional[str] = None
     last_saved_utc: Optional[str] = None
 
@@ -93,6 +95,8 @@ class ExecutionStateManager:
                 tracked_tickets=data.get("tracked_tickets", []),
                 daily_trades_count=data.get("daily_trades_count", 0),
                 daily_realized_pnl=data.get("daily_realized_pnl", 0.0),
+                peak_equity=float(data.get("peak_equity", 0.0) or 0.0),
+                current_drawdown_pct=float(data.get("current_drawdown_pct", 0.0) or 0.0),
                 last_reconciliation_utc=data.get("last_reconciliation_utc"),
                 last_saved_utc=data.get("last_saved_utc"),
             )

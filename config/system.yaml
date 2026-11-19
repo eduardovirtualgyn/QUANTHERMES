@@ -17,6 +17,16 @@ execution:
   retry_delay_seconds: 0.5
   order_timeout_ms: 10000
 
+# Conta RoboForex ProCent: moeda USC (centavos), alavancagem até 1:2000, stop-out 30%.
+# symbol_suffix é concatenado ao símbolo lógico quando não houver alias explícito.
+broker:
+  name: "roboforex_procent"
+  account_currency: "USC"
+  symbol_suffix: ""
+  symbol_aliases: {}
+  max_leverage: 2000
+  stop_out_level_pct: 30.0
+
 network:
   heartbeat_interval_seconds: 1.0
   heartbeat_timeout_seconds: 5.0

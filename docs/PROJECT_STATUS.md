@@ -1,8 +1,28 @@
 # Status do Projeto QUANT HERMES
 **Projeto:** QUANT HERMES — Autonomous Multi-Agent Quantitative Trading System  
-**Última Atualização:** 07 de Novembro de 2026  
-**Fase Atual:** FASE 7 — Execução Autônoma (VALIDADO)  
-**Próxima Fase:** FASE 8 — Dashboard e Monitoramento (Aguardando autorização)  
+**Última Atualização:** 19 de Novembro de 2026  
+**Conta-alvo:** RoboForex ProCent (moeda USC, alavancagem até 1:2000, stop-out 30%)  
+**Prontidão:** paper e backtest offline corrigidos; **não homologado** em terminal MT5 ao vivo. Nenhuma ordem real é enviada por esta revisão.
+
+## 0. Correção de 19/11/2026 — o que o código faz de verdade
+
+As seções históricas abaixo registram o que foi construído por fase. Várias delas diziam VALIDADO além do que o código sustentava. O estado executável hoje é:
+
+* O orquestrador chama o Portfolio Manager e o Risk Engine com a assinatura real. Um teste paper (sinal → risco → lote → ordem → fill → estado) produz ordem no adapter em memória.
+* PnL diário/semanal do adapter Windows sai de `history_deals_get` mais o flutuante das posições abertas e alimenta os circuit breakers.
+* Preenchimento parcial (retcode 10010), requote, preço mudado e off-quotes são tratados com retentativa limitada. A chave de idempotência não é reenviada depois do resultado final.
+* O lote gravado na idempotência é o lote autorizado, não o percentual de risco.
+* Recuperação casa magic number com o símbolo lógico (sufixo do broker). O pico de equity fica no estado em disco.
+* `config/*.yaml` é carregado e validado no construtor do orquestrador. Configuração inválida aborta.
+* Símbolos lógicos passam por `execution/symbols.py` (sufixo configurável). O lote usa `volume_min` / `volume_step` / `volume_max` do terminal, arredonda para baixo e rejeita abaixo do mínimo. Não há arredondamento para cima até o mínimo do YAML.
+* Há checagem de margem (`order_calc_margin` / margem livre) com teto de uso e stop-out de 30%.
+* Swap (`swap_long` / `swap_short`, dia triplo) entra no dimensionamento quando o spec traz a taxa e no backtest (catálogo ProCent se o spec vier zerado).
+* Endpoints que alteram estado exigem `HERMES_OPERATOR_TOKEN`. Não há token padrão. Portas Docker/systemd escutam em 127.0.0.1. O cérebro Linux sobe por `monitoring.asgi:app`. O gateway MT5 é `execution.windows_gateway_asgi:app` no Windows. Wine não é caminho suportado.
+* O backtest cobra spread (médias públicas ProCent: XAUUSD ~0,18 USD, majors ~1,3–1,9 pips, comissão zero), slippage e swap. Gap no stop preenche no open. Stop e alvo na mesma barra assumem o stop. Sharpe usa a frequência da barra. O relatório inclui profit factor, expectância em R, drawdown, trades e t-stat/IC.
+* O walk-forward avalia as estratégias fora da amostra, com Deflated Sharpe e Bonferroni (estratégias × conjuntos de parâmetros). Não simula mais ganho fictício do classificador.
+* Pacotes vazios, **não implementados** (não importar como se existissem): `agents/`, `api/`, `dashboard/`, `backtesting/`, `execution/mt5/`, `execution/mql5/`, `execution/paper/`, `execution/backtest/`. O dashboard real está em `monitoring/`. O paper adapter está em `execution/adapters/paper.py`. O backtest está em `strategies/backtest/`.
+
+**Fase atual do código:** execução paper corrigida; demo/live no MT5 continua não homologada.  
 
 ---
 

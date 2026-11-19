@@ -11,9 +11,10 @@ Responsabilidade:
 """
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional
 import httpx
+
+from core.secrets import require_env
 
 from core.logger import get_logger
 from core.models.market import MarketBar, MarketTick, SymbolSpecification, TimeFrame
@@ -32,12 +33,12 @@ class LinuxMT5BridgeAdapter(TradingPlatformAdapter):
     def __init__(
         self,
         gateway_url: str = "http://127.0.0.1:8001",
-        bridge_token: str = "HERMES_BRIDGE_SECRET_2026",
+        bridge_token: Optional[str] = None,
         timeout_seconds: float = 5.0,
         client: Optional[httpx.AsyncClient] = None,
     ) -> None:
         self.gateway_url = gateway_url.rstrip("/")
-        self.bridge_token = bridge_token
+        self.bridge_token = bridge_token.strip() if bridge_token else require_env("HERMES_BRIDGE_TOKEN")
         self.timeout = timeout_seconds
         self._external_client = client
         self._internal_client: Optional[httpx.AsyncClient] = None

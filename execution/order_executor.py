@@ -26,6 +26,7 @@ from execution.idempotency import (
     SqliteIdempotencyStore,
     StoreCorruptedError,
 )
+from execution.symbols import SymbolMapper
 
 logger = get_logger("execution.order_executor")
 
@@ -42,8 +43,10 @@ class OrderExecutor:
         adapter: TradingPlatformAdapter,
         idempotency_window_seconds: int = 60,
         store: Optional[SqliteIdempotencyStore] = None,
+        symbol_mapper: Optional[SymbolMapper] = None,
     ) -> None:
         self.adapter = adapter
+        self.symbol_mapper = symbol_mapper or SymbolMapper()
         self.idempotency_window_seconds = idempotency_window_seconds
         self.store = store or SqliteIdempotencyStore(
             retention_window_seconds=max(86400, idempotency_window_seconds)
@@ -116,7 +119,7 @@ class OrderExecutor:
                 strategy_id=proposal.strategy_id,
                 symbol=proposal.symbol,
                 action=proposal.action,
-                requested_lot=proposal.target_risk_pct,
+                requested_lot=risk_auth.authorized_lot,
                 authorized_lot=risk_auth.authorized_lot,
                 entry_price=proposal.entry_price,
                 stop_loss=risk_auth.stop_loss,
@@ -278,8 +281,15 @@ class OrderExecutor:
         )
 
         open_positions = await self.adapter.get_open_positions()
-        # Mapeia por magic e símbolo para identificação cruzada segura
-        pos_by_magic_sym = {(p.magic, p.symbol.upper()): p for p in open_positions}
+
+        def _match_position(magic: int, symbol: str):
+            logical = self.symbol_mapper.to_logical(symbol)
+            for position in open_positions:
+                if int(position.magic) != int(magic):
+                    continue
+                if self.symbol_mapper.same_instrument(position.symbol, logical):
+                    return position
+            return None
 
         reconciled_results: List[Dict[str, Any]] = []
 
@@ -294,8 +304,8 @@ class OrderExecutor:
                 extra={"idempotency_key": key, "state": state, "symbol": sym, "magic": magic},
             )
 
-            # Verifica se existe posição aberta no broker com a mesma assinatura
-            matched_pos = pos_by_magic_sym.get((magic, sym))
+            # Magic + símbolo lógico, mesmo quando o broker publica sufixo.
+            matched_pos = _match_position(magic, sym)
 
             if matched_pos is not None:
                 # A ordem foi efetivamente aberta no broker antes do crash!

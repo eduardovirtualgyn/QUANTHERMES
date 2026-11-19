@@ -15,7 +15,7 @@ import socket
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -199,16 +199,91 @@ class PreflightChecker:
             report.critical_errors.extend(risk_errors)
             report.is_ready = False
 
-        # 5. Variáveis de Ambiente e Segurança
-        op_token = os.getenv("HERMES_OPERATOR_TOKEN", "")
-        if not op_token:
-            report.warnings.append("HERMES_OPERATOR_TOKEN não definido no ambiente (usará token padrão de fábrica)")
-        elif len(op_token) < 12:
-            report.warnings.append("HERMES_OPERATOR_TOKEN possui menos de 12 caracteres (recomendado >= 16 para produção)")
-        else:
-            report.checks_passed.append("HERMES_OPERATOR_TOKEN configurado com entropia adequada")
+        # 5. Segredos obrigatórios — sem token padrão
+        for secret_name in ("HERMES_OPERATOR_TOKEN", "HERMES_GATEWAY_TOKEN", "HERMES_BRIDGE_TOKEN"):
+            value = os.getenv(secret_name, "").strip()
+            if not value:
+                report.critical_errors.append(f"{secret_name} ausente. Não há token padrão; o arranque deve falhar.")
+                report.is_ready = False
+            elif len(value) < 12:
+                report.critical_errors.append(f"{secret_name} curto demais (mínimo 12 caracteres)")
+                report.is_ready = False
+            else:
+                report.checks_passed.append(f"{secret_name} presente")
+
+        entry_ok, entry_passed, entry_errors = self.check_deployment_entrypoints()
+        report.checks_passed.extend(entry_passed)
+        if not entry_ok:
+            report.critical_errors.extend(entry_errors)
+            report.is_ready = False
 
         return report
+
+    def check_deployment_entrypoints(self) -> Tuple[bool, List[str], List[str]]:
+        """Confere que o cérebro Linux não importa MetaTrader5 e que a escuta é local."""
+        passed: List[str] = []
+        errors: List[str] = []
+        brain_entry = self.base_dir / "monitoring" / "asgi.py"
+        systemd_unit = self.base_dir / "deploy" / "systemd" / "hermes-brain.service"
+        compose_files = [
+            self.base_dir / "docker-compose.yml",
+            self.base_dir / "docker" / "docker-compose.yml",
+        ]
+        dockerfile = self.base_dir / "docker" / "Dockerfile.brain"
+
+        if not brain_entry.exists():
+            errors.append("monitoring/asgi.py ausente: uvicorn monitoring.server:app não expõe `app`")
+        else:
+            text = brain_entry.read_text(encoding="utf-8")
+            imported = any(
+                token in text
+                for token in ("import MetaTrader5", "from execution.adapters.windows_mt5", "import windows_mt5")
+            )
+            if imported:
+                errors.append("monitoring/asgi.py importa o gateway MT5. O cérebro Linux não pode fazer isso.")
+            elif "create_monitoring_app" not in text:
+                errors.append("monitoring/asgi.py não constrói a aplicação de monitoramento")
+            else:
+                passed.append("Cérebro ASGI em monitoring.asgi:app sem import de MetaTrader5")
+
+        if systemd_unit.exists():
+            unit = systemd_unit.read_text(encoding="utf-8")
+            if "monitoring.asgi:app" not in unit:
+                errors.append("systemd não aponta para monitoring.asgi:app")
+            elif "0.0.0.0" in unit:
+                errors.append("systemd publica o cérebro em 0.0.0.0")
+            elif "127.0.0.1" not in unit:
+                errors.append("systemd não restringe a escuta a 127.0.0.1")
+            else:
+                passed.append("systemd escuta em 127.0.0.1 via monitoring.asgi:app")
+        else:
+            errors.append("Unidade systemd hermes-brain.service ausente")
+
+        for compose in compose_files:
+            if not compose.exists():
+                continue
+            body = compose.read_text(encoding="utf-8")
+            if ":-HERMES_" in body or "HERMES_GATEWAY_TOKEN_DEFAULT" in body or "HERMES_RISK_OVERRIDE" in body:
+                errors.append(f"{compose.name} ainda tem token padrão embutido")
+            if '"8000:8000"' in body or "'8000:8000'" in body or '"8001:8001"' in body:
+                errors.append(f"{compose.name} publica porta em todas as interfaces")
+            else:
+                passed.append(f"{compose.name} não publica 8000/8001 em 0.0.0.0 e não tem token padrão")
+
+        if dockerfile.exists():
+            docker_text = dockerfile.read_text(encoding="utf-8")
+            if "monitoring.asgi:app" not in docker_text or "0.0.0.0" in docker_text:
+                errors.append("Dockerfile.brain não usa monitoring.asgi:app em 127.0.0.1")
+            else:
+                passed.append("Dockerfile.brain entra por monitoring.asgi:app em 127.0.0.1")
+
+        windows_entry = self.base_dir / "execution" / "windows_gateway_asgi.py"
+        if windows_entry.exists():
+            passed.append("Gateway Windows separado em execution.windows_gateway_asgi:app")
+        else:
+            errors.append("Entrypoint do gateway Windows ausente")
+
+        return len(errors) == 0, passed, errors
 
 
 if __name__ == "__main__":

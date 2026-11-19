@@ -27,4 +27,6 @@ execution_filters:
   max_slippage_points: 30
   friday_closing_utc_hour: 20 # Liquida posições intraday na sexta às 20h UTC
   news_blackout_minutes: 15 # Bloqueio antes e depois de eventos de alto impacto
+  max_margin_usage_pct: 20.0 # Margem usada após a ordem / equity. Stop-out da conta é 30%.
+  stop_out_level_pct: 30.0
 

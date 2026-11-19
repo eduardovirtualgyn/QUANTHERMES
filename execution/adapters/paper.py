@@ -11,6 +11,7 @@ from uuid import uuid4
 from core.models.market import MarketBar, MarketTick, SymbolSpecification, TimeFrame
 from core.models.risk import AccountState, OrderRequest, OrderResult, Position
 from execution.adapters.base import TradingPlatformAdapter
+from execution.symbols import SymbolMapper
 
 
 class PaperTradingAdapter(TradingPlatformAdapter):
@@ -25,6 +26,7 @@ class PaperTradingAdapter(TradingPlatformAdapter):
         initial_balance: float = 100000.0,
         currency: str = "USD",
         leverage: int = 100,
+        symbol_mapper: Optional[SymbolMapper] = None,
     ):
         self._connected: bool = False
         self._initial_balance: float = initial_balance
@@ -32,6 +34,7 @@ class PaperTradingAdapter(TradingPlatformAdapter):
         self._currency: str = currency
         self._leverage: int = leverage
         self._peak_equity: float = initial_balance
+        self.symbol_mapper = symbol_mapper or SymbolMapper()
 
         self._positions: Dict[int, Position] = {}
         self._latest_ticks: Dict[str, MarketTick] = {}
@@ -242,10 +245,20 @@ class PaperTradingAdapter(TradingPlatformAdapter):
             weekly_pnl_pct=round(((equity - self._initial_balance) / self._initial_balance) * 100.0, 2),
         )
 
+    def restore_peak_equity(self, peak_equity: float) -> None:
+        if peak_equity > self._peak_equity:
+            self._peak_equity = float(peak_equity)
+
+    def current_peak_equity(self) -> float:
+        return self._peak_equity
+
     async def get_symbol_info(self, symbol: str) -> SymbolSpecification:
-        if symbol not in self._specs:
-            raise ValueError(f"Símbolo desconhecido no Paper Adapter: {symbol}")
-        return self._specs[symbol]
+        logical = self.symbol_mapper.to_logical(symbol)
+        if logical in self._specs:
+            return self._specs[logical]
+        if symbol in self._specs:
+            return self._specs[symbol]
+        raise ValueError(f"Símbolo desconhecido no Paper Adapter: {symbol}")
 
     async def get_ticks(self, symbol: str, count: int = 100) -> List[MarketTick]:
         ticks = self._historical_ticks.get(symbol, [])
@@ -335,7 +348,8 @@ class PaperTradingAdapter(TradingPlatformAdapter):
     async def get_open_positions(self, symbol: Optional[str] = None) -> List[Position]:
         positions = list(self._positions.values())
         if symbol:
-            return [p for p in positions if p.symbol == symbol]
+            logical = self.symbol_mapper.to_logical(symbol)
+            return [p for p in positions if self.symbol_mapper.same_instrument(p.symbol, logical)]
         return positions
 
     async def close_position(self, ticket: int, volume: Optional[float] = None) -> OrderResult:

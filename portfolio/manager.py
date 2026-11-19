@@ -50,6 +50,7 @@ class PortfolioManager:
         self.cooldown_store_path = cooldown_store_path
 
         # Registro de deduplicação: (symbol, action) -> timestamp
+        self.last_proposal: Optional[TradeProposal] = None
         self._recent_proposals: Dict[Tuple[str, str], datetime] = {}
         if self.cooldown_store_path:
             self._load_cooldown_state()
@@ -123,6 +124,7 @@ class PortfolioManager:
         5. Constrói TradeProposal formal.
         6. Submete a proposta à soberania do Risk Engine.
         """
+        self.last_proposal = None
         if decision.action.value == "HOLD":
             logger.debug("portfolio_manager_ignored_hold_decision", symbol=decision.symbol)
             return None
@@ -209,6 +211,7 @@ class PortfolioManager:
             target_risk_pct=allocated_risk,
         )
 
+        self.last_proposal = proposal
         # Registra proposta para deduplicação
         self._record_proposal(decision.symbol, action_str, now)
 

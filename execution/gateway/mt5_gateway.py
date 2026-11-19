@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 from core.logger import get_logger
 from core.models.market import MarketBar, MarketTick, SymbolSpecification, TimeFrame
 from core.models.risk import AccountState, OrderRequest, OrderResult, Position
+from core.secrets import require_env, tokens_equal
 from execution.adapters.base import TradingPlatformAdapter
-from execution.adapters.windows_mt5 import WindowsMT5Adapter
 
 logger = get_logger("execution.gateway.mt5_gateway")
 
@@ -46,17 +46,27 @@ def create_gateway_app(
         description="Ponte de execução de alta performance para arquitetura dual-node (Linux <-> Windows).",
     )
 
-    expected_token = secret_token or os.getenv("HERMES_BRIDGE_TOKEN", "HERMES_BRIDGE_SECRET_2026")
-    exec_adapter = adapter or WindowsMT5Adapter()
+    expected_token = secret_token.strip() if secret_token else require_env("HERMES_BRIDGE_TOKEN")
+    if adapter is None:
+        from execution.adapters.windows_mt5 import WindowsMT5Adapter
+
+        exec_adapter = WindowsMT5Adapter()
+    else:
+        exec_adapter = adapter
 
     async def verify_bridge_token(
         x_hermes_bridge_token: Optional[str] = Header(None, alias="X-Hermes-Bridge-Token")
     ) -> str:
-        if not x_hermes_bridge_token or x_hermes_bridge_token != expected_token:
-            logger.warning("Tentativa de acesso não autorizado ao MT5 Gateway", extra={"provided_token": str(x_hermes_bridge_token)[:4]})
+        if not x_hermes_bridge_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token da ponte MT5 ausente.",
+            )
+        if not tokens_equal(x_hermes_bridge_token, expected_token):
+            logger.warning("Tentativa de acesso não autorizado ao MT5 Gateway")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acesso não autorizado: Token da ponte MT5 inválido ou ausente.",
+                detail="Acesso não autorizado: Token da ponte MT5 inválido.",
             )
         return x_hermes_bridge_token
 
@@ -136,4 +146,5 @@ if __name__ == "__main__":
     gateway_port = int(os.getenv("HERMES_GATEWAY_PORT", "8001"))
     app = create_gateway_app()
     logger.info("Iniciando MT5 Gateway na porta %d...", gateway_port)
-    uvicorn.run(app, host="0.0.0.0", port=gateway_port)
+    # Escuta só em localhost. Acesso remoto passa por VPN ou reverse proxy.
+    uvicorn.run(app, host="127.0.0.1", port=gateway_port)
