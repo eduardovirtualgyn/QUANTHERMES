@@ -49,6 +49,10 @@ class ExecutionConfig(BaseModel):
     max_retry_attempts: int = 3
     retry_delay_seconds: float = 0.5
     order_timeout_ms: int = 10000
+    # Gateway HTTP fica desligado. O processo Windows fala com o terminal direto.
+    remote_gateway_enabled: bool = False
+    bind_host: str = "127.0.0.1"
+    bind_port: int = 8000
 
 
 class BrokerConfig(BaseModel):

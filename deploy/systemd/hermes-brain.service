@@ -1,5 +1,8 @@
 # ==============================================================================
-# QUANT HERMES — SYSTEMD SERVICE MANIFEST
+# OBSOLETO. Não é o deploy suportado.
+# Use o Agendador de Tarefas no Windows: docs/deploy/WINDOWS.md
+# ==============================================================================
+# QUANT HERMES — SYSTEMD SERVICE MANIFEST (legado, não usar)
 # Caminho de Instalação: /etc/systemd/system/hermes-brain.service
 # Comandos:
 #   sudo systemctl daemon-reload

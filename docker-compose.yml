@@ -1,5 +1,6 @@
 # ==============================================================================
-# QUANT HERMES — ORQUESTRAÇÃO DE CONTÊINERES PRODUÇÃO (VPS LINUX)
+# OPCIONAL / desenvolvimento. O deploy da conta RoboForex é Windows.
+# Guia: docs/deploy/WINDOWS.md
 # ==============================================================================
 
 version: "3.8"

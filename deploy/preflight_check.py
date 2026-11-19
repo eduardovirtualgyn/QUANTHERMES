@@ -164,7 +164,11 @@ class PreflightChecker:
         except Exception as e:
             return False, f"Erro ao testar porta {port}: {e}"
 
-    def run_all_checks(self) -> PreflightReport:
+    def run_all_checks(
+        self,
+        require_terminal: bool = False,
+        terminal_probe: Optional[object] = None,
+    ) -> PreflightReport:
         report = PreflightReport(
             is_ready=True,
             python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
@@ -199,8 +203,11 @@ class PreflightChecker:
             report.critical_errors.extend(risk_errors)
             report.is_ready = False
 
-        # 5. Segredos obrigatórios — sem token padrão
-        for secret_name in ("HERMES_OPERATOR_TOKEN", "HERMES_GATEWAY_TOKEN", "HERMES_BRIDGE_TOKEN"):
+        # 5. Segredos. O gateway remoto é opcional e não exige token quando está desligado.
+        required_secrets = ["HERMES_OPERATOR_TOKEN"]
+        if os.getenv("HERMES_REMOTE_GATEWAY", "").strip().lower() in {"1", "true", "yes", "on"}:
+            required_secrets.extend(["HERMES_GATEWAY_TOKEN", "HERMES_BRIDGE_TOKEN"])
+        for secret_name in required_secrets:
             value = os.getenv(secret_name, "").strip()
             if not value:
                 report.critical_errors.append(f"{secret_name} ausente. Não há token padrão; o arranque deve falhar.")
@@ -217,48 +224,186 @@ class PreflightChecker:
             report.critical_errors.extend(entry_errors)
             report.is_ready = False
 
+        if require_terminal:
+            term_ok, term_passed, term_errors = self.check_windows_terminal(terminal_probe)
+            report.checks_passed.extend(term_passed)
+            if not term_ok:
+                report.critical_errors.extend(term_errors)
+                report.is_ready = False
+        else:
+            report.checks_passed.append(
+                "Checagem do terminal MT5 não exigida (paper ou suíte offline). "
+                "No host Windows use --require-terminal."
+            )
+
         return report
 
-    def check_deployment_entrypoints(self) -> Tuple[bool, List[str], List[str]]:
-        """Confere que o cérebro Linux não importa MetaTrader5 e que a escuta é local."""
+    def check_windows_terminal(
+        self,
+        probe: Optional[object] = None,
+    ) -> Tuple[bool, List[str], List[str]]:
+        """
+        Exige, no Windows com --require-terminal: pacote MetaTrader5, terminal logado,
+        moeda USC/cent, símbolos resolvidos e AutoTrading ligado.
+        O probe padrão só roda quando o operador pede. A suíte offline injeta um dicionário
+        ou não chama este método.
+        """
+        if sys.platform != "win32" and probe is None:
+            return False, [], ["A checagem do terminal MT5 só roda no Windows."]
+
+        snapshot = probe if isinstance(probe, dict) else None
+        if snapshot is None:
+            caller = probe if callable(probe) else self.live_mt5_probe
+            snapshot = caller()
+        return self.evaluate_terminal_snapshot(snapshot)
+
+    def evaluate_terminal_snapshot(self, snapshot: Dict[str, object]) -> Tuple[bool, List[str], List[str]]:
         passed: List[str] = []
         errors: List[str] = []
+        if not snapshot.get("importable"):
+            errors.append("MetaTrader5 não importável neste Python de 64 bits.")
+            return False, passed, errors
+        passed.append("Pacote MetaTrader5 importável")
+
+        if not snapshot.get("connected"):
+            errors.append(
+                "Terminal MT5 não está em execução ou não está logado "
+                f"({snapshot.get('error') or 'sem terminal_info'})."
+            )
+            return False, passed, errors
+        passed.append("Terminal MT5 em execução")
+
+        login = int(snapshot.get("login") or 0)
+        if login <= 0:
+            errors.append("Conta MT5 sem login. Abra o terminal RoboForex e entre na conta.")
+        else:
+            passed.append(f"Conta logada (login {login})")
+
+        currency = str(snapshot.get("currency") or "").upper()
+        if currency not in {"USC", "CENT"} and "USC" not in currency:
+            errors.append(
+                f"Moeda da conta é '{currency or 'vazia'}'. RoboForex ProCent precisa ser USC (cent)."
+            )
+        else:
+            passed.append(f"Moeda da conta {currency} (cent)")
+
+        if not snapshot.get("trade_allowed"):
+            errors.append("AutoTrading desligado no terminal (botão Algo Trading).")
+        else:
+            passed.append("AutoTrading habilitado")
+
+        resolved = snapshot.get("resolved") or {}
+        if isinstance(resolved, dict):
+            missing = [name for name, ok in resolved.items() if not ok]
+            if missing:
+                errors.append(
+                    "Mapeamento de símbolo não resolveu no terminal: " + ", ".join(missing)
+                )
+            elif resolved:
+                passed.append("Mapeamento de símbolos resolvido no terminal: " + ", ".join(resolved))
+            else:
+                errors.append("Nenhum símbolo foi verificado no mapeamento.")
+        else:
+            errors.append("Resposta de mapeamento de símbolos inválida.")
+
+        return len(errors) == 0, passed, errors
+
+    def live_mt5_probe(self) -> Dict[str, object]:
+        """
+        Lê o terminal local. Não envia ordem. Chamado só com --require-terminal.
+        initialize() anexa ao terminal já aberto; não é usado pela suíte offline.
+        """
+        try:
+            import MetaTrader5 as mt5
+        except ImportError:
+            return {"importable": False, "connected": False, "error": "ImportError"}
+
+        from execution.symbols import SymbolMapper
+
+        if not mt5.initialize():
+            err = mt5.last_error()
+            return {"importable": True, "connected": False, "error": str(err), "resolved": {}}
+        try:
+            term = mt5.terminal_info()
+            account = mt5.account_info()
+            mapper = SymbolMapper()
+            try:
+                from core.config import load_hermes_config
+
+                config = load_hermes_config(self.base_dir / "config")
+                mapper = SymbolMapper(
+                    suffix=config.broker.symbol_suffix,
+                    aliases=dict(config.broker.symbol_aliases),
+                )
+                logical = list(config.instruments.keys()) or ["EURUSD", "XAUUSD"]
+            except Exception:
+                logical = ["EURUSD", "XAUUSD"]
+            resolved: Dict[str, bool] = {}
+            for name in logical:
+                broker_name = mapper.to_broker(name)
+                mt5.symbol_select(broker_name, True)
+                resolved[name] = mt5.symbol_info(broker_name) is not None
+            return {
+                "importable": True,
+                "connected": bool(term and getattr(term, "connected", False)),
+                "trade_allowed": bool(term and getattr(term, "trade_allowed", False)),
+                "currency": getattr(account, "currency", "") if account else "",
+                "login": int(getattr(account, "login", 0) or 0) if account else 0,
+                "resolved": resolved,
+                "error": "",
+            }
+        finally:
+            mt5.shutdown()
+
+    def check_deployment_entrypoints(self) -> Tuple[bool, List[str], List[str]]:
+        """Deploy suportado é o Windows na mesma máquina do terminal. Docker é opcional."""
+        passed: List[str] = []
+        errors: List[str] = []
+        setup = self.base_dir / "deploy" / "windows" / "setup.ps1"
+        service = self.base_dir / "deploy" / "windows" / "service_main.py"
+        guide = self.base_dir / "docs" / "deploy" / "WINDOWS.md"
         brain_entry = self.base_dir / "monitoring" / "asgi.py"
-        systemd_unit = self.base_dir / "deploy" / "systemd" / "hermes-brain.service"
+
+        if not setup.exists():
+            errors.append("deploy/windows/setup.ps1 ausente")
+        else:
+            text = setup.read_text(encoding="utf-8")
+            if "127.0.0.1" not in text:
+                errors.append("setup.ps1 não restringe a API a 127.0.0.1")
+            elif "0.0.0.0" in text:
+                errors.append("setup.ps1 publica a API em 0.0.0.0")
+            else:
+                passed.append("setup.ps1 do Windows presente e restrito a 127.0.0.1")
+
+        if not service.exists():
+            errors.append("deploy/windows/service_main.py ausente")
+        else:
+            body = service.read_text(encoding="utf-8")
+            if "127.0.0.1" not in body:
+                errors.append("service_main.py não fixa o bind em 127.0.0.1")
+            else:
+                passed.append("service_main.py é o processo único no Windows")
+
+        if not guide.exists():
+            errors.append("docs/deploy/WINDOWS.md ausente")
+        else:
+            passed.append("Guia Windows em docs/deploy/WINDOWS.md")
+
+        if not brain_entry.exists():
+            errors.append("monitoring/asgi.py ausente")
+        else:
+            text = brain_entry.read_text(encoding="utf-8")
+            if "import MetaTrader5" in text or "from execution.adapters.windows_mt5" in text:
+                errors.append("monitoring/asgi.py importa MetaTrader5 na carga do módulo")
+            elif "create_monitoring_app" not in text:
+                errors.append("monitoring/asgi.py não constrói a aplicação")
+            else:
+                passed.append("monitoring.asgi:app não importa MetaTrader5 na carga")
+
         compose_files = [
             self.base_dir / "docker-compose.yml",
             self.base_dir / "docker" / "docker-compose.yml",
         ]
-        dockerfile = self.base_dir / "docker" / "Dockerfile.brain"
-
-        if not brain_entry.exists():
-            errors.append("monitoring/asgi.py ausente: uvicorn monitoring.server:app não expõe `app`")
-        else:
-            text = brain_entry.read_text(encoding="utf-8")
-            imported = any(
-                token in text
-                for token in ("import MetaTrader5", "from execution.adapters.windows_mt5", "import windows_mt5")
-            )
-            if imported:
-                errors.append("monitoring/asgi.py importa o gateway MT5. O cérebro Linux não pode fazer isso.")
-            elif "create_monitoring_app" not in text:
-                errors.append("monitoring/asgi.py não constrói a aplicação de monitoramento")
-            else:
-                passed.append("Cérebro ASGI em monitoring.asgi:app sem import de MetaTrader5")
-
-        if systemd_unit.exists():
-            unit = systemd_unit.read_text(encoding="utf-8")
-            if "monitoring.asgi:app" not in unit:
-                errors.append("systemd não aponta para monitoring.asgi:app")
-            elif "0.0.0.0" in unit:
-                errors.append("systemd publica o cérebro em 0.0.0.0")
-            elif "127.0.0.1" not in unit:
-                errors.append("systemd não restringe a escuta a 127.0.0.1")
-            else:
-                passed.append("systemd escuta em 127.0.0.1 via monitoring.asgi:app")
-        else:
-            errors.append("Unidade systemd hermes-brain.service ausente")
-
         for compose in compose_files:
             if not compose.exists():
                 continue
@@ -268,27 +413,15 @@ class PreflightChecker:
             if '"8000:8000"' in body or "'8000:8000'" in body or '"8001:8001"' in body:
                 errors.append(f"{compose.name} publica porta em todas as interfaces")
             else:
-                passed.append(f"{compose.name} não publica 8000/8001 em 0.0.0.0 e não tem token padrão")
-
-        if dockerfile.exists():
-            docker_text = dockerfile.read_text(encoding="utf-8")
-            if "monitoring.asgi:app" not in docker_text or "0.0.0.0" in docker_text:
-                errors.append("Dockerfile.brain não usa monitoring.asgi:app em 127.0.0.1")
-            else:
-                passed.append("Dockerfile.brain entra por monitoring.asgi:app em 127.0.0.1")
-
-        windows_entry = self.base_dir / "execution" / "windows_gateway_asgi.py"
-        if windows_entry.exists():
-            passed.append("Gateway Windows separado em execution.windows_gateway_asgi:app")
-        else:
-            errors.append("Entrypoint do gateway Windows ausente")
+                passed.append(f"{compose.name} é opcional e não publica 8000/8001 em 0.0.0.0")
 
         return len(errors) == 0, passed, errors
 
 
 if __name__ == "__main__":
+    require = "--require-terminal" in sys.argv or os.getenv("HERMES_REQUIRE_TERMINAL", "") == "1"
     checker = PreflightChecker()
-    rep = checker.run_all_checks()
-    print(rep.summary())
+    rep = checker.run_all_checks(require_terminal=require)
+    sys.stdout.write(rep.summary() + "\n")
     if not rep.is_ready:
         sys.exit(1)

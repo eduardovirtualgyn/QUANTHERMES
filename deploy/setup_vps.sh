@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# QUANT HERMES — SCRIPT DEFENSIVO DE PROVISIONAMENTO DE VPS LINUX
-# Ambiente Alvo: Ubuntu 22.04 / 24.04 LTS x86_64
-# Execução: sudo bash deploy/setup_vps.sh
+# OBSOLETO. O deploy suportado é Windows, no mesmo host do terminal MT5.
+# Guia: docs/deploy/WINDOWS.md
+# Script: deploy/windows/setup.ps1
+# Este arquivo não instala mais pacotes Linux.
 # ==============================================================================
+echo "Deploy suportado: Windows. Leia docs/deploy/WINDOWS.md"
+exit 1
+
+# O restante histórico não executa.
 
 set -euo pipefail
 IFS=$'\n\t'
