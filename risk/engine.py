@@ -44,6 +44,8 @@ class RiskEngine:
         max_positions_per_symbol: int = 1,
         max_spread_multiplier: float = 2.0,
         require_stop_loss: bool = True,
+        max_margin_usage_pct: float = 20.0,
+        stop_out_level_pct: float = 30.0,
     ):
         # Pisos invioláveis (_HARDCODED_FLOOR)
         if max_risk_percentage_hard_cap > 0.50:
@@ -62,6 +64,8 @@ class RiskEngine:
         self.max_positions_per_symbol = max_positions_per_symbol
         self.max_spread_multiplier = max_spread_multiplier
         self.require_stop_loss = require_stop_loss
+        self.max_margin_usage_pct = max_margin_usage_pct
+        self.stop_out_level_pct = stop_out_level_pct
 
     def calculate_current_open_risk_pct(
         self,
@@ -88,6 +92,50 @@ class RiskEngine:
 
         return round((total_risk_money / equity) * 100.0, 4)
 
+    def assess_margin(
+        self,
+        account_state: AccountState,
+        margin_required: Optional[float],
+        max_margin_usage_pct: Optional[float] = None,
+        stop_out_level_pct: Optional[float] = None,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Checagem pré-ordem. margin_required vem de order_calc_margin / order_check.
+        Rejeita se a margem livre não cobre a ordem, se o uso projetado passa do teto
+        ou se o nível de margem ficaria no stop-out (30% na ProCent) ou abaixo dele.
+        """
+        if margin_required is None:
+            return True, None
+        if margin_required < 0.0:
+            return False, "MARGIN: margem requerida inválida"
+
+        usage_cap = max_margin_usage_pct if max_margin_usage_pct is not None else self.max_margin_usage_pct
+        stop_out = stop_out_level_pct if stop_out_level_pct is not None else self.stop_out_level_pct
+
+        if account_state.free_margin + 1e-9 < margin_required:
+            return False, (
+                f"MARGIN: margem livre ({account_state.free_margin:.2f}) "
+                f"menor que a requerida ({margin_required:.2f})"
+            )
+
+        if account_state.equity <= 0.0:
+            return False, "MARGIN: equity não positiva"
+
+        projected_margin = account_state.margin + margin_required
+        usage_pct = (projected_margin / account_state.equity) * 100.0
+        if usage_pct > usage_cap:
+            return False, (
+                f"MARGIN: uso projetado ({usage_pct:.2f}%) excede o teto configurado ({usage_cap:.2f}%)"
+            )
+
+        if projected_margin > 0.0:
+            margin_level = (account_state.equity / projected_margin) * 100.0
+            if margin_level <= stop_out:
+                return False, (
+                    f"MARGIN: nível projetado ({margin_level:.2f}%) no stop-out ou abaixo ({stop_out:.2f}%)"
+                )
+        return True, None
+
     def evaluate_proposal(
         self,
         proposal: TradeProposal,
@@ -97,6 +145,8 @@ class RiskEngine:
         spec: SymbolSpecification,
         open_positions: List[Position],
         known_specs: Optional[dict[str, SymbolSpecification]] = None,
+        margin_required: Optional[float] = None,
+        config_min_volume: Optional[float] = None,
     ) -> RiskAuthorization:
         """
         Avaliação soberana da proposta de operação em rigorosa sequência de segurança.
@@ -184,7 +234,13 @@ class RiskEngine:
             logger.warning("risk_evaluation_rejected_aggregate_risk", reason=reason)
             return RiskAuthorization(**rejection_kwargs, rejection_reason=reason)
 
-        # 8. DIMENSIONAMENTO DE RISCO E LOTE
+        # 8. MARGEM PRÉ-TRADE (order_calc_margin / margem livre)
+        margin_ok, margin_reason = self.assess_margin(account_state, margin_required)
+        if not margin_ok:
+            logger.warning("risk_evaluation_rejected_margin", reason=margin_reason)
+            return RiskAuthorization(**rejection_kwargs, rejection_reason=margin_reason)
+
+        # 9. DIMENSIONAMENTO DE RISCO E LOTE
         # O risco da proposta é limitado pelo hard cap e pelo orçamento restante
         allocated_risk_pct = min(
             proposal.target_risk_pct,
@@ -199,6 +255,8 @@ class RiskEngine:
             entry_price=proposal.entry_price,
             stop_loss_price=proposal.stop_loss,
             spec=spec,
+            direction=proposal.action,
+            config_min_volume=config_min_volume,
         )
 
         if lot <= 0.0:
@@ -209,7 +267,7 @@ class RiskEngine:
             logger.warning("risk_evaluation_rejected_lot_below_min", reason=reason)
             return RiskAuthorization(**rejection_kwargs, rejection_reason=reason)
 
-        # 9. APROVAÇÃO SOBERANA
+        # 10. APROVAÇÃO SOBERANA
         logger.info(
             "RISK_AUTHORIZATION_APPROVED",
             symbol=proposal.symbol,

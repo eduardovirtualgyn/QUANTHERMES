@@ -6,14 +6,33 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
 from core.logger import log
 from core.models.market import MarketBar, MarketTick, SymbolSpecification, TimeFrame
 from core.models.risk import AccountState, OrderRequest, OrderResult, Position
+from execution.account_pnl import pnl_percent, realized_from_deals, unrealized_from_positions
 from execution.adapters.base import PlatformConnectionError, TradingPlatformAdapter
+from execution.symbols import SymbolMapper
+
+# Retcodes oficiais do terminal. Usados quando o pacote não está importado (testes).
+TRADE_RETCODE_REQUOTE = 10004
+TRADE_RETCODE_DONE = 10009
+TRADE_RETCODE_DONE_PARTIAL = 10010
+TRADE_RETCODE_TIMEOUT = 10012
+TRADE_RETCODE_PRICE_CHANGED = 10020
+TRADE_RETCODE_PRICE_OFF = 10021
+TRADE_RETCODE_CONNECTION = 10031
+RETRYABLE_RETCODES = {
+    TRADE_RETCODE_REQUOTE,
+    TRADE_RETCODE_TIMEOUT,
+    TRADE_RETCODE_PRICE_CHANGED,
+    TRADE_RETCODE_PRICE_OFF,
+    TRADE_RETCODE_CONNECTION,
+}
+SUCCESS_RETCODES = {TRADE_RETCODE_DONE, TRADE_RETCODE_DONE_PARTIAL}
 
 # Importação condicional do pacote oficial MetaTrader5
 try:
@@ -66,6 +85,10 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
         server: Optional[str] = None,
         timeout_ms: int = 15000,
         symbol_aliases: Optional[Dict[str, str]] = None,
+        symbol_suffix: str = "",
+        symbol_mapper: Optional[SymbolMapper] = None,
+        max_retry_attempts: int = 3,
+        retry_delay_seconds: float = 0.5,
     ):
         if not MT5_AVAILABLE:
             log.warning("Pacote oficial MetaTrader5 não está instalado neste ambiente")
@@ -76,13 +99,24 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
         self._server = server
         self._timeout_ms = timeout_ms
         self._connected: bool = False
-        self._symbol_aliases: Dict[str, str] = symbol_aliases or {}
+        self.symbol_mapper = symbol_mapper or SymbolMapper(suffix=symbol_suffix, aliases=symbol_aliases)
+        self._symbol_aliases: Dict[str, str] = dict(self.symbol_mapper.aliases)
         self._idempotency_cache: Dict[str, OrderResult] = {}
         self._peak_equity: float = 0.0
+        self._max_retry_attempts = max(1, int(max_retry_attempts))
+        self._retry_delay_seconds = max(0.0, float(retry_delay_seconds))
 
     def _resolve_symbol(self, canonical_symbol: str) -> str:
         """Traduz símbolo canônico interno para o símbolo exato negociado pela corretora."""
-        return self._symbol_aliases.get(canonical_symbol, canonical_symbol)
+        return self.symbol_mapper.to_broker(canonical_symbol)
+
+    def restore_peak_equity(self, peak_equity: float) -> None:
+        """Restaura o pico persistido. Um restart não zera o drawdown."""
+        if peak_equity > self._peak_equity:
+            self._peak_equity = float(peak_equity)
+
+    def current_peak_equity(self) -> float:
+        return self._peak_equity
 
     async def connect(self) -> bool:
         if not MT5_AVAILABLE:
@@ -149,6 +183,22 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
         if self._peak_equity > 0.0:
             drawdown_pct = round(max(0.0, (self._peak_equity - equity) / self._peak_equity * 100.0), 2)
 
+        now = datetime.now(timezone.utc)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = day_start - timedelta(days=day_start.weekday())
+
+        def _pnl_sources():
+            deals_day = mt5.history_deals_get(day_start, now) if hasattr(mt5, "history_deals_get") else None
+            deals_week = mt5.history_deals_get(week_start, now) if hasattr(mt5, "history_deals_get") else None
+            positions = mt5.positions_get() if hasattr(mt5, "positions_get") else None
+            return deals_day, deals_week, positions
+
+        deals_day, deals_week, open_positions = await _run_on_mt5_thread(_pnl_sources)
+        unrealized = unrealized_from_positions(open_positions)
+        balance = float(acc.balance)
+        daily_pnl_pct = pnl_percent(balance, realized_from_deals(deals_day), unrealized)
+        weekly_pnl_pct = pnl_percent(balance, realized_from_deals(deals_week), unrealized)
+
         return AccountState(
             login=acc.login,
             server=acc.server,
@@ -160,9 +210,9 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
             margin_level=float(acc.margin_level) if acc.margin_level else 0.0,
             leverage=int(acc.leverage),
             peak_equity=self._peak_equity,
-            current_drawdown_pct=drawdown_pct,
-            daily_pnl_pct=0.0,
-            weekly_pnl_pct=0.0,
+            current_drawdown_pct=min(100.0, drawdown_pct),
+            daily_pnl_pct=daily_pnl_pct,
+            weekly_pnl_pct=weekly_pnl_pct,
         )
 
     async def get_symbol_info(self, symbol: str) -> SymbolSpecification:
@@ -184,9 +234,17 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
         elif info.filling_mode & 1:  # SYMBOL_FILLING_FOK
             filling_mode = "FOK"
 
+        swap_mode_code = int(getattr(info, "swap_mode", 0) or 0)
+        if swap_mode_code in (1, 3, 4):
+            swap_mode = "account_currency"
+        elif swap_mode_code in (2, 5, 6):
+            swap_mode = "interest"
+        else:
+            swap_mode = "points"
+
         return SymbolSpecification(
             symbol=info.name,
-            canonical_name=symbol,
+            canonical_name=self.symbol_mapper.to_logical(symbol),
             category="metal" if "XAU" in symbol or "GOLD" in symbol else "forex_major",
             base_currency=info.currency_base,
             quote_currency=info.currency_profit,
@@ -200,6 +258,10 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
             volume_step=info.volume_step,
             stops_level=info.trade_stops_level,
             filling_mode=filling_mode,
+            swap_long=float(getattr(info, "swap_long", 0.0) or 0.0),
+            swap_short=float(getattr(info, "swap_short", 0.0) or 0.0),
+            swap_rollover3days=int(getattr(info, "swap_rollover3days", 3) or 3),
+            swap_mode=swap_mode,
         )
 
     async def get_ticks(self, symbol: str, count: int = 100) -> List[MarketTick]:
@@ -265,9 +327,16 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
         def _check():
             sym_info = mt5.symbol_info(broker_symbol)
             if not sym_info:
-                return {"retcode": 10013, "has_margin": False, "comment": "Símbolo inválido"}
+                return {"retcode": 10013, "has_margin": False, "comment": "Símbolo inválido", "margin_required": 0.0}
 
             order_type = mt5.ORDER_TYPE_BUY if request.action == "BUY" else mt5.ORDER_TYPE_SELL
+            margin_required = None
+            if hasattr(mt5, "order_calc_margin"):
+                margin_required = mt5.order_calc_margin(
+                    order_type, broker_symbol, float(request.volume), float(request.price)
+                )
+            account = mt5.account_info() if hasattr(mt5, "account_info") else None
+            free_margin = float(account.margin_free) if account is not None else 0.0
 
             check_req = {
                 "action": mt5.TRADE_ACTION_DEAL,
@@ -280,29 +349,79 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
                 "magic": int(request.magic),
             }
             check_res = mt5.order_check(check_req)
-            if check_res is None:
+            if check_res is None and margin_required is None:
                 err = mt5.last_error()
-                return {"retcode": err[0], "has_margin": False, "comment": err[1]}
+                return {"retcode": err[0], "has_margin": False, "comment": err[1], "margin_required": 0.0}
 
+            if margin_required is None and check_res is not None:
+                margin_required = float(check_res.margin)
+            margin_required = float(margin_required or 0.0)
+            retcode = check_res.retcode if check_res is not None else 0
+            comment = check_res.comment if check_res is not None else "order_calc_margin"
+            if check_res is not None:
+                free_margin = float(check_res.margin_free)
             return {
-                "retcode": check_res.retcode,
-                "margin_required": float(check_res.margin),
-                "free_margin": float(check_res.margin_free),
-                "has_margin": check_res.retcode == 0,
-                "comment": check_res.comment,
+                "retcode": retcode,
+                "margin_required": margin_required,
+                "free_margin": free_margin,
+                "has_margin": retcode == 0 and free_margin + 1e-9 >= margin_required,
+                "comment": comment,
             }
 
         return await _run_on_mt5_thread(_check)
 
+    def _retcode(self, name: str, fallback: int) -> int:
+        if mt5 is None:
+            return fallback
+        return int(getattr(mt5, name, fallback))
+
+    async def reconnect(self) -> bool:
+        """Reconecta o terminal com backoff exponencial limitado."""
+        delay = self._retry_delay_seconds
+        for _attempt in range(self._max_retry_attempts):
+            try:
+                await self.disconnect()
+            except Exception:
+                self._connected = False
+            try:
+                connected = await self.connect()
+            except PlatformConnectionError:
+                connected = False
+            if connected:
+                healthy = await self.is_connected()
+                if healthy:
+                    return True
+            if delay > 0:
+                await asyncio.sleep(delay)
+            delay = min(delay * 2 if delay else 0.5, 30.0)
+        return False
+
     async def send_order(self, request: OrderRequest) -> OrderResult:
-        # Verificação de idempotência anti-duplicação
+        # Verificação de idempotência anti-duplicação. O cache só guarda o resultado final.
         if request.idempotency_key in self._idempotency_cache:
             log.warning("Tentativa de ordem duplicada interceptada", key=request.idempotency_key)
             return self._idempotency_cache[request.idempotency_key]
 
         broker_symbol = self._resolve_symbol(request.symbol)
+        price = float(request.price)
+        done = self._retcode("TRADE_RETCODE_DONE", TRADE_RETCODE_DONE)
+        partial = self._retcode("TRADE_RETCODE_DONE_PARTIAL", TRADE_RETCODE_DONE_PARTIAL)
+        requote = self._retcode("TRADE_RETCODE_REQUOTE", TRADE_RETCODE_REQUOTE)
+        price_changed = self._retcode("TRADE_RETCODE_PRICE_CHANGED", TRADE_RETCODE_PRICE_CHANGED)
+        price_off = self._retcode("TRADE_RETCODE_PRICE_OFF", TRADE_RETCODE_PRICE_OFF)
+        timeout = self._retcode("TRADE_RETCODE_TIMEOUT", TRADE_RETCODE_TIMEOUT)
+        connection = self._retcode("TRADE_RETCODE_CONNECTION", TRADE_RETCODE_CONNECTION)
+        retryable = {requote, price_changed, price_off, timeout, connection}
 
-        def _send():
+        def _quote() -> Optional[float]:
+            if not hasattr(mt5, "symbol_info_tick"):
+                return None
+            tick = mt5.symbol_info_tick(broker_symbol)
+            if tick is None:
+                return None
+            return float(tick.ask if request.action == "BUY" else tick.bid)
+
+        def _send_once(limit_price: float) -> OrderResult:
             order_type = mt5.ORDER_TYPE_BUY if request.action == "BUY" else mt5.ORDER_TYPE_SELL
             sym_info = mt5.symbol_info(broker_symbol)
             if not sym_info:
@@ -314,7 +433,6 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
                     comment="Símbolo não encontrado",
                 )
 
-            # Seleciona modo de preenchimento apropriado
             type_filling = mt5.ORDER_FILLING_RETURN
             if sym_info.filling_mode & 2:
                 type_filling = mt5.ORDER_FILLING_IOC
@@ -326,7 +444,7 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
                 "symbol": broker_symbol,
                 "volume": float(request.volume),
                 "type": order_type,
-                "price": float(request.price),
+                "price": float(limit_price),
                 "sl": float(request.stop_loss),
                 "tp": float(request.take_profit),
                 "deviation": int(request.slippage_points),
@@ -347,21 +465,55 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
                     comment=f"Erro de comunicação MT5: {err[1]}",
                 )
 
+            filled = result.retcode in (done, partial) and float(result.volume or 0.0) > 0.0 and int(result.order or 0) > 0
+            comment = result.comment or ""
+            if result.retcode == partial:
+                comment = f"PARTIAL_FILL: {comment}".strip()
             return OrderResult(
                 request_id=request.request_id,
                 idempotency_key=request.idempotency_key,
-                success=result.retcode == mt5.TRADE_RETCODE_DONE,
+                success=filled,
                 retcode=result.retcode,
-                order_ticket=result.order,
-                deal_ticket=result.deal,
-                volume_executed=result.volume,
-                price_executed=result.price,
-                comment=result.comment,
+                order_ticket=int(result.order or 0),
+                deal_ticket=int(result.deal or 0),
+                volume_executed=float(result.volume or 0.0),
+                price_executed=float(result.price or 0.0),
+                comment=comment,
             )
 
-        res = await _run_on_mt5_thread(_send)
-        self._idempotency_cache[request.idempotency_key] = res
-        return res
+        result = OrderResult(
+            request_id=request.request_id,
+            idempotency_key=request.idempotency_key,
+            success=False,
+            retcode=10031,
+            comment="Sem tentativa de envio",
+        )
+        for attempt in range(self._max_retry_attempts):
+            result = await _run_on_mt5_thread(lambda limit_price=price: _send_once(limit_price))
+            if result.success:
+                break
+            if result.retcode not in retryable or attempt == self._max_retry_attempts - 1:
+                break
+            if result.retcode == connection:
+                reconnected = await self.reconnect()
+                if not reconnected:
+                    result = OrderResult(
+                        request_id=request.request_id,
+                        idempotency_key=request.idempotency_key,
+                        success=False,
+                        retcode=connection,
+                        comment="RECONNECT_FAILED",
+                    )
+                    break
+            if result.retcode in (requote, price_changed, price_off):
+                refreshed = await _run_on_mt5_thread(_quote)
+                if refreshed and refreshed > 0:
+                    price = refreshed
+            if self._retry_delay_seconds > 0:
+                await asyncio.sleep(self._retry_delay_seconds)
+
+        self._idempotency_cache[request.idempotency_key] = result
+        return result
 
     async def get_open_positions(self, symbol: Optional[str] = None) -> List[Position]:
         broker_symbol = self._resolve_symbol(symbol) if symbol else None
@@ -382,7 +534,7 @@ class WindowsMT5Adapter(TradingPlatformAdapter):
             positions.append(
                 Position(
                     ticket=p.ticket,
-                    symbol=p.symbol,
+                    symbol=self.symbol_mapper.to_logical(p.symbol),
                     magic=p.magic,
                     position_type="BUY" if p.type == 0 else "SELL",
                     volume=float(p.volume),

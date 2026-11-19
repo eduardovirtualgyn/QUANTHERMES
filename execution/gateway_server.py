@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from core.logger import get_logger
 from core.models.market import TimeFrame
 from core.models.risk import OrderRequest
+from core.secrets import require_env, tokens_equal
 from execution.adapters.base import TradingPlatformAdapter
 
 logger = get_logger("execution.gateway_server")
@@ -38,7 +39,7 @@ def create_gateway_app(
     """
     Fábrica da aplicação FastAPI do Gateway MT5.
     """
-    expected_token = api_token or os.getenv("HERMES_GATEWAY_TOKEN", "HERMES_GATEWAY_TOKEN_DEFAULT")
+    expected_token = api_token.strip() if api_token else require_env("HERMES_GATEWAY_TOKEN")
 
     app = FastAPI(
         title="QUANT HERMES — MT5 Remote Gateway",
@@ -53,7 +54,7 @@ def create_gateway_app(
                 detail="Token de autorização ausente ou malformado",
             )
         token = authorization.split("Bearer ", 1)[1].strip()
-        if token != expected_token:
+        if not tokens_equal(token, expected_token):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Token de acesso ao MT5 Gateway inválido",

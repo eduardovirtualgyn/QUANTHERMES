@@ -1,5 +1,8 @@
 # ==============================================================================
-# QUANT HERMES — SYSTEMD SERVICE MANIFEST
+# OBSOLETO. Não é o deploy suportado.
+# Use o Agendador de Tarefas no Windows: docs/deploy/WINDOWS.md
+# ==============================================================================
+# QUANT HERMES — SYSTEMD SERVICE MANIFEST (legado, não usar)
 # Caminho de Instalação: /etc/systemd/system/hermes-brain.service
 # Comandos:
 #   sudo systemctl daemon-reload
@@ -30,7 +33,7 @@ Environment="PYTHONPATH=/opt/hermes-quant"
 ExecStartPre=/opt/hermes-quant/.venv/bin/python deploy/preflight_check.py
 
 # Comando principal de execução
-ExecStart=/opt/hermes-quant/.venv/bin/python -m uvicorn monitoring.server:app --host 0.0.0.0 --port 8000
+ExecStart=/opt/hermes-quant/.venv/bin/python -m uvicorn monitoring.asgi:app --host 127.0.0.1 --port 8000
 
 # Política de Recuperação de Falhas e Alta Disponibilidade
 Restart=always

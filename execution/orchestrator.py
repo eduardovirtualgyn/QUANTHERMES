@@ -18,16 +18,18 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from core.config import HermesConfig, load_hermes_config
 from core.event_bus import PrioritizedEventBus
 from core.logger import get_logger
 from core.models.agent import AgentSignal, ConsensusDecision, SignalDirection
 from core.models.market import MarketBar, MarketTick, TimeFrame
 from core.models.regime import MarketRegimeType, RegimeClassification
-from core.models.risk import AccountState, OrderResult, Position, RiskAuthorization, TradeProposal
+from core.models.risk import AccountState, OrderRequest, OrderResult, Position, RiskAuthorization, TradeProposal
 from data.ingestion.collector import MarketDataCollector
 from execution.adapters.base import TradingPlatformAdapter
 from execution.order_executor import OrderExecutor
 from execution.state_manager import ExecutionState, ExecutionStateManager
+from execution.symbols import SymbolMapper
 from intelligence.agents.ag01_trend import TrendIntelligenceAgent
 from intelligence.agents.ag02_structure import MarketStructureAgent
 from intelligence.agents.ag03_momentum import MomentumBreakoutAgent
@@ -39,6 +41,7 @@ from intelligence.consensus.engine import ConsensusEngine
 from intelligence.regime.hmm_detector import HMMRegimeDetector
 from portfolio.manager import PortfolioManager
 from portfolio.reconciler import PositionReconciler, ReconciliationReport
+from risk.circuit_breakers import CircuitBreakerManager
 from risk.engine import RiskEngine
 from strategies.base import BaseStrategy
 from strategies.breakout.volatility_breakout import VolatilityBreakoutStrategy
@@ -82,18 +85,43 @@ class AutonomousTradingOrchestrator:
         symbols: Optional[List[str]] = None,
         event_bus: Optional[PrioritizedEventBus] = None,
         storage_path: str = "data/storage/execution_state.json",
+        config: Optional[HermesConfig] = None,
+        symbol_mapper: Optional[SymbolMapper] = None,
     ) -> None:
+        # Configuração validada no arranque. YAML inválido ou piso violado aborta aqui.
+        self.config = config if config is not None else load_hermes_config()
+        self.symbol_mapper = symbol_mapper or SymbolMapper(
+            suffix=self.config.broker.symbol_suffix,
+            aliases=self.config.broker.symbol_aliases,
+        )
         self.adapter = adapter
         self.symbols = symbols or ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD"]
         self.event_bus = event_bus or PrioritizedEventBus()
 
         # 1. Componentes de Execução e Estado
         self.state_manager = ExecutionStateManager(storage_path=storage_path)
-        self.order_executor = OrderExecutor(adapter=self.adapter)
+        self.order_executor = OrderExecutor(adapter=self.adapter, symbol_mapper=self.symbol_mapper)
         self.reconciler = PositionReconciler()
 
-        # 2. Componentes de Risco e Portfólio
-        self.risk_engine = RiskEngine()
+        # 2. Componentes de Risco e Portfólio (limites vindos do YAML validado)
+        risk_cfg = self.config.risk
+        self.risk_engine = RiskEngine(
+            circuit_breakers=CircuitBreakerManager(
+                max_daily_loss_pct=risk_cfg.daily_loss_limit_pct,
+                max_weekly_loss_pct=risk_cfg.weekly_loss_limit_pct,
+                max_drawdown_limit_pct=risk_cfg.emergency_kill_switch_drawdown_pct,
+                friday_closing_utc_hour=risk_cfg.friday_closing_utc_hour,
+            ),
+            default_risk_percentage=risk_cfg.risk_percentage,
+            max_risk_percentage_hard_cap=risk_cfg.max_risk_percentage_hard_cap,
+            max_aggregate_open_risk_pct=risk_cfg.max_aggregate_open_risk_pct,
+            max_open_positions=risk_cfg.max_open_positions,
+            max_positions_per_symbol=risk_cfg.max_positions_per_symbol,
+            max_spread_multiplier=risk_cfg.max_spread_multiplier,
+            require_stop_loss=risk_cfg.require_stop_loss,
+            max_margin_usage_pct=risk_cfg.max_margin_usage_pct,
+            stop_out_level_pct=risk_cfg.stop_out_level_pct,
+        )
         self.portfolio_manager = PortfolioManager(risk_engine=self.risk_engine)
 
         # 3. Componentes de Inteligência e Consenso
@@ -125,6 +153,7 @@ class AutonomousTradingOrchestrator:
         # 6. Buffers de Mercado e Coleta
         self.collector = MarketDataCollector(adapter=self.adapter, event_bus=self.event_bus)
         self._bars_buffer: Dict[str, List[MarketBar]] = {sym: [] for sym in self.symbols}
+        self._last_ticks: Dict[str, MarketTick] = {}
         self._current_regimes: Dict[str, RegimeClassification] = {}
         self._internal_positions: Dict[int, Position] = {}
         self._session_metrics = {
@@ -165,10 +194,12 @@ class AutonomousTradingOrchestrator:
             if not spec:
                 logger.warning("Especificação não disponível para símbolo no broker", extra={"symbol": symbol})
 
-        # Restaura estado operacional persistido
+        # Restaura estado operacional persistido, inclusive o pico de equity.
         saved_state = self.state_manager.load_state()
         if saved_state:
             logger.info("Estado prévio restaurado", extra={"tracked": len(saved_state.tracked_tickets)})
+            if saved_state.peak_equity > 0 and hasattr(self.adapter, "restore_peak_equity"):
+                self.adapter.restore_peak_equity(saved_state.peak_equity)
 
         # Executa protocolo de recuperação pós-crash de ordens não resolvidas no SQLite
         recovered = await self.order_executor.recover_unresolved_orders()
@@ -192,6 +223,7 @@ class AutonomousTradingOrchestrator:
         if not self.is_running:
             return
 
+        self._last_ticks[tick.symbol] = tick
         await self.collector.ingest_tick(tick)
 
     async def process_bar(self, bar: MarketBar) -> Optional[OrderResult]:
@@ -273,45 +305,79 @@ class AutonomousTradingOrchestrator:
         if consensus.action not in (SignalDirection.BUY, SignalDirection.SELL):
             return None
 
-        # 5. Gestão Centralizada de Portfólio (Portfolio Manager)
+        # 5. Especificação do terminal e estado da conta (antes do risco)
+        spec_call = self.adapter.get_symbol_info(sym)
+        symbol_spec = await spec_call if asyncio.iscoroutine(spec_call) else spec_call
+        if symbol_spec is None:
+            logger.error("FAIL_SAFE: especificação do símbolo indisponível", extra={"symbol": sym})
+            return None
+
         account_call = self.adapter.get_account_state()
         account = await account_call if asyncio.iscoroutine(account_call) else account_call
+        self._persist_peak(account)
 
         pos_call = self.adapter.get_open_positions()
         open_positions = await pos_call if asyncio.iscoroutine(pos_call) else pos_call
 
-        proposal = self.portfolio_manager.process_consensus_decision(
+        instrument = self.config.instruments.get(sym)
+        if instrument is not None and instrument.typical_spread_price > 0:
+            normal_spread = instrument.typical_spread_price
+        else:
+            normal_spread = symbol_spec.point * 15
+
+        # 6. Portfólio constrói a proposta e o Risk Engine autoriza (assinatura real)
+        risk_auth = self.portfolio_manager.process_consensus_decision(
             decision=consensus,
             strategy_id=emitting_strategy.strategy_id,
-            signal=active_signal,
             account_state=account,
+            current_tick=self._last_ticks.get(sym),
+            normal_spread=normal_spread,
+            spec=symbol_spec,
             open_positions=open_positions,
+            target_risk_pct=self.config.risk.risk_percentage,
         )
+        proposal = self.portfolio_manager.last_proposal
 
-        if not proposal:
-            logger.info("Proposta de trade inibida pelo Portfolio Manager (cooldown ou correlação)", extra={"symbol": sym})
+        if risk_auth is None:
+            logger.info("Proposta de trade inibida pelo Portfolio Manager (cooldown ou HOLD)", extra={"symbol": sym})
             return None
 
         self._session_metrics["proposals"] += 1
 
-        # 6. Avaliação Soberana do Risk Engine (Princípio Inviolável)
-        spec_call = self.adapter.get_symbol_info(sym)
-        symbol_spec = await spec_call if asyncio.iscoroutine(spec_call) else spec_call
-
-        risk_auth = self.risk_engine.evaluate_proposal(
-            proposal=proposal,
-            account_state=account,
-            open_positions=open_positions,
-            symbol_spec=symbol_spec,
-        )
-
-        if not risk_auth.approved:
+        if not risk_auth.approved or proposal is None:
             self._session_metrics["rejected"] += 1
             logger.info(
                 "Proposta REJEITADA pelo Risk Engine",
                 extra={"symbol": sym, "reason": risk_auth.rejection_reason},
             )
             return None
+
+        # Margem pré-trade: order_check / order_calc_margin contra o teto configurado.
+        if risk_auth.approved:
+            probe = OrderRequest(
+                auth_id=risk_auth.auth_id,
+                symbol=proposal.symbol,
+                action=proposal.action,
+                volume=risk_auth.authorized_lot,
+                price=proposal.entry_price,
+                stop_loss=risk_auth.stop_loss,
+                take_profit=risk_auth.take_profit,
+                slippage_points=risk_auth.max_slippage_points,
+                magic=proposal.magic,
+                idempotency_key=f"margin-{risk_auth.auth_id}",
+            )
+            check_call = self.adapter.check_order(probe)
+            check = await check_call if asyncio.iscoroutine(check_call) else check_call
+            margin_ok, margin_reason = self.risk_engine.assess_margin(
+                account,
+                check.get("margin_required") if isinstance(check, dict) else None,
+                max_margin_usage_pct=self.config.risk.max_margin_usage_pct,
+                stop_out_level_pct=self.config.risk.stop_out_level_pct,
+            )
+            if not margin_ok:
+                self._session_metrics["rejected"] += 1
+                logger.info("Proposta REJEITADA na checagem de margem", extra={"symbol": sym, "reason": margin_reason})
+                return None
 
         self._session_metrics["approved"] += 1
 
@@ -427,6 +493,17 @@ class AutonomousTradingOrchestrator:
             tracked_positions=list(self.state_manager.current_state.tracked_tickets),
             reconciliation_reports_count=self._session_metrics["reconciliations"],
         )
+
+    def _persist_peak(self, account: AccountState) -> None:
+        """Grava o pico de equity para que um restart não apague o drawdown."""
+        peak = account.peak_equity
+        if hasattr(self.adapter, "current_peak_equity"):
+            peak = max(peak, float(self.adapter.current_peak_equity()))
+        state = self.state_manager.current_state
+        if peak > state.peak_equity or account.current_drawdown_pct != state.current_drawdown_pct:
+            state.peak_equity = peak
+            state.current_drawdown_pct = account.current_drawdown_pct
+            self.state_manager.save_state()
 
     async def shutdown(self) -> None:
         """Encerra a operação de forma segura, salva o estado e desconecta."""

@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Mapping
+
+from core.platform_io import configure_utf8_stdio
 
 
 # Padrões regex para interceptar segredos comuns em strings
@@ -101,6 +103,7 @@ def setup_logger(
     log_file: str | None = None,
 ) -> logging.Logger:
     """Configura e retorna um logger padronizado do QUANT HERMES."""
+    configure_utf8_stdio()
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
     logger.propagate = False
@@ -119,8 +122,9 @@ def setup_logger(
 
     # Handler de arquivo opcional
     if log_file:
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        path = Path(log_file)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(path, encoding="utf-8")
         file_handler.setFormatter(HermesJsonFormatter())
         logger.addHandler(file_handler)
 

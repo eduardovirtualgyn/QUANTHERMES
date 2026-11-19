@@ -8,9 +8,10 @@ Implementa a interface TradingPlatformAdapter para operação distribuída em do
 """
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional
 import httpx
+
+from core.secrets import require_env
 
 from core.logger import get_logger
 from core.models.market import MarketBar, MarketTick, SymbolSpecification, TimeFrame
@@ -29,11 +30,11 @@ class RemoteMT5GatewayAdapter(TradingPlatformAdapter):
     def __init__(
         self,
         gateway_url: str = "http://127.0.0.1:8001",
-        api_token: str = "HERMES_GATEWAY_TOKEN_DEFAULT",
+        api_token: Optional[str] = None,
         timeout_seconds: float = 5.0,
     ) -> None:
         self.gateway_url = gateway_url.rstrip("/")
-        self.api_token = api_token
+        self.api_token = api_token.strip() if api_token else require_env("HERMES_GATEWAY_TOKEN")
         self.timeout = timeout_seconds
         self._is_connected = False
         self._client: Optional[httpx.AsyncClient] = None

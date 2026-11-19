@@ -45,3 +45,9 @@ Para garantir que o QUANT HERMES seja um sistema autônomo, proprietário e livr
 4. **Licença Adotada pelo QUANT HERMES:**
    * O QUANT HERMES será estruturado sob uma licença clara e institucional (definida como proprietária interna ou MIT para componentes de base modular, a critério dos mantenedores do projeto).
 
+---
+
+## 4. Verificação de 19/11/2026 — nada de GPL/AGPL no pacote
+
+A pasta `references/` está no `.gitignore` e **não faz parte do pacote instalável**. Uma busca nos módulos `core`, `execution`, `risk`, `strategies`, `intelligence`, `portfolio`, `monitoring`, `data` e `deploy` não encontra `import` de `references`, `ea31337` ou `nexus`. O teste `tests/security/test_license_boundary.py` repete essa busca. Código sob GPL-3.0 (EA31337) e AGPL-3.0 (Nexus) permanece rejeitado: não é importado nem copiado para o pacote principal. Se uma cópia local de `references/` existir na máquina de auditoria, ela fica fora do Git e fora do caminho de import.
+

@@ -23,6 +23,10 @@ class TestWindowsMT5Adapter:
 
     @patch("execution.adapters.windows_mt5.mt5")
     async def test_successful_connect(self, mock_mt5):
+        pytest.importorskip(
+            "MetaTrader5",
+            reason="Pacote MetaTrader5 é exclusivo do Windows e não está instalado neste ambiente",
+        )
         mock_mt5.initialize.return_value = True
         mock_terminal_info = MagicMock()
         mock_terminal_info.trade_allowed = True

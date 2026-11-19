@@ -49,6 +49,21 @@ class ExecutionConfig(BaseModel):
     max_retry_attempts: int = 3
     retry_delay_seconds: float = 0.5
     order_timeout_ms: int = 10000
+    # Gateway HTTP fica desligado. O processo Windows fala com o terminal direto.
+    remote_gateway_enabled: bool = False
+    bind_host: str = "127.0.0.1"
+    bind_port: int = 8000
+
+
+class BrokerConfig(BaseModel):
+    """Conta-alvo. ProCent usa moeda USC e pode publicar símbolos com sufixo."""
+
+    name: str = "roboforex_procent"
+    account_currency: str = "USC"
+    symbol_suffix: str = ""
+    symbol_aliases: Dict[str, str] = Field(default_factory=dict)
+    max_leverage: int = Field(default=2000, gt=0, le=2000)
+    stop_out_level_pct: float = Field(default=30.0, ge=30.0, le=100.0)
 
 
 class InstrumentConfig(BaseModel):
@@ -63,6 +78,11 @@ class InstrumentConfig(BaseModel):
     min_volume: float
     max_volume: float
     volume_step: float
+    typical_spread_price: float = 0.0
+    slippage_price: float = 0.0
+    swap_long: float = 0.0
+    swap_short: float = 0.0
+    commission_per_lot: float = 0.0
 
 
 class RiskConfig(BaseModel):
@@ -85,6 +105,8 @@ class RiskConfig(BaseModel):
     max_slippage_points: int = 30
     friday_closing_utc_hour: int = 20
     news_blackout_minutes: int = 15
+    max_margin_usage_pct: float = Field(default=20.0, gt=0.0, le=80.0)
+    stop_out_level_pct: float = Field(default=30.0, ge=30.0, le=100.0)
 
     @field_validator("risk_percentage")
     @classmethod
@@ -129,6 +151,7 @@ class RiskConfig(BaseModel):
 class HermesConfig(BaseModel):
     system: SystemConfig
     execution: ExecutionConfig
+    broker: BrokerConfig = Field(default_factory=BrokerConfig)
     instruments: Dict[str, InstrumentConfig]
     risk: RiskConfig
     raw_strategies: Dict[str, Any] = Field(default_factory=dict)
@@ -160,6 +183,8 @@ def load_hermes_config(config_dir: str | Path | None = None) -> HermesConfig:
     risk_raw = load_yaml(config_dir / "risk.yaml")
     models_raw = load_yaml(config_dir / "models.yaml")
 
+    broker_raw = sys_raw.get("broker", {}) or {}
+
     # Flatten risk sections to match RiskConfig model
     risk_flat = {}
     if "per_trade" in risk_raw:
@@ -179,6 +204,7 @@ def load_hermes_config(config_dir: str | Path | None = None) -> HermesConfig:
     return HermesConfig(
         system=SystemConfig(**sys_raw.get("system", {})),
         execution=ExecutionConfig(**sys_raw.get("execution", {})),
+        broker=BrokerConfig(**broker_raw),
         instruments=instruments_dict,
         risk=RiskConfig(**risk_flat),
         raw_strategies=strat_raw.get("families", {}),

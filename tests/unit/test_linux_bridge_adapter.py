@@ -202,6 +202,7 @@ class TestLinuxMT5BridgeAdapter:
         # Aponta para uma porta morta/inexistente com timeout mínimo
         dead_bridge = LinuxMT5BridgeAdapter(
             gateway_url="http://127.0.0.1:59999",
+            bridge_token="TEST_HERMES_SECRET_TOKEN_2026",
             timeout_seconds=0.2,
         )
 

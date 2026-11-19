@@ -111,3 +111,15 @@ Para resolver esse dilema sem comprometer nem a execução física nem a integri
    docker compose logs -f hermes-brain
    ```
 
+---
+
+### 7. Correção de 19/11/2026 — escuta local e entrypoints
+
+Wine não é o caminho suportado. O cérebro Linux não importa `MetaTrader5`.
+
+* Cérebro: `uvicorn monitoring.asgi:app --host 127.0.0.1 --port 8000`
+* Gateway Windows: `uvicorn execution.windows_gateway_asgi:app --host 127.0.0.1 --port 8001`
+* `HERMES_OPERATOR_TOKEN`, `HERMES_GATEWAY_TOKEN` e `HERMES_BRIDGE_TOKEN` são obrigatórios. Não existe token padrão.
+* Docker publica 8000 (e, se algum dia publicar 8001) somente em `127.0.0.1`. Acesso remoto passa por reverse proxy com TLS ou por VPN. Publicar em `0.0.0.0` atravessa o UFW do host porque o Docker mexe no iptables.
+* O comando antigo `uvicorn execution.gateway_server:app` não tinha objeto `app` e não é mais o entrypoint.
+

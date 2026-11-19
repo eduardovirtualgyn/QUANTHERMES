@@ -1,4 +1,8 @@
 # RELATÓRIO DE PRONTIDÃO DE EXECUÇÃO (EXECUTION READINESS)
+
+> **Correção de 19/11/2026.** O adapter real é `execution/adapters/windows_mt5.py`, não `execution/adapters/mt5_adapter.py` (esse caminho não existe). O fluxo paper passa de novo pelo Risk Engine com a assinatura correta, trata fill parcial e requote, e persiste o pico de equity. Continua **inapto** para conta real ou demo desassistida: não houve sessão com o terminal RoboForex nesta revisão, e o cérebro Linux não importa MetaTrader5. Gateway Windows: `execution.windows_gateway_asgi:app` em `127.0.0.1`.
+
+# RELATÓRIO DE PRONTIDÃO DE EXECUÇÃO (EXECUTION READINESS)
 **Projeto:** QUANT HERMES — Autonomous Multi-Agent Quantitative Trading System  
 **Documento:** `docs/audit/EXECUTION_READINESS.md`  
 **Data:** 07 de Novembro de 2026  

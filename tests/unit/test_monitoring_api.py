@@ -2,6 +2,7 @@
 QUANT HERMES — TESTES DA API E DASHBOARD DE MONITORAMENTO
 Módulo: tests.unit.test_monitoring_api
 """
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -27,9 +28,10 @@ async def temp_environment():
     adapter = PaperTradingAdapter(initial_balance=10000.0)
     await adapter.connect()
 
+    os.environ["HERMES_OPERATOR_TOKEN"] = "HERMES_OPERATOR_TEST_TOKEN"
     risk_engine = RiskEngine()
     provider = TelemetryProvider(adapter=adapter, risk_engine=risk_engine)
-    app = create_monitoring_app(provider=provider)
+    app = create_monitoring_app(provider=provider, operator_token="HERMES_OPERATOR_TEST_TOKEN")
 
     client = TestClient(app)
     yield client, adapter, risk_engine, provider
@@ -115,26 +117,45 @@ class TestMonitoringAPI:
     async def test_kill_switch_engage_and_disengage(self, temp_environment):
         client, _, risk_engine, _ = temp_environment
 
-        # 1. Aciona o Kill Switch
+        auth = {"Authorization": "Bearer HERMES_OPERATOR_TEST_TOKEN"}
+
+        # 1. Sem token o acionamento é recusado
+        missing = client.post(
+            "/api/v1/risk/kill-switch/engage",
+            json={"reason": "Alerta de volatilidade extrema", "operator": "OPERATOR_ADMIN"},
+        )
+        assert missing.status_code == 401
+
+        # 2. Aciona o Kill Switch com o token
         engage_resp = client.post(
             "/api/v1/risk/kill-switch/engage",
+            headers=auth,
             json={"reason": "Alerta de volatilidade extrema", "operator": "OPERATOR_ADMIN"},
         )
         assert engage_resp.status_code == 200
         assert engage_resp.json()["status"] == "EMERGENCY_HALT"
         assert risk_engine.kill_switch.is_active() is True
 
-        # 2. Tenta desarmar com token incorreto
+        # 3. Sem cabeçalho, o desarme também é 401
+        missing_disengage = client.post(
+            "/api/v1/risk/kill-switch/disengage",
+            json={"operator_token": "HERMES_OPERATOR_TEST_TOKEN"},
+        )
+        assert missing_disengage.status_code == 401
+
+        # 4. Cabeçalho válido, token de corpo incorreto
         bad_token_resp = client.post(
             "/api/v1/risk/kill-switch/disengage",
+            headers=auth,
             json={"operator_token": "WRONG_TOKEN_123"},
         )
         assert bad_token_resp.status_code == 403
 
-        # 3. Desarma com o token de operador válido
+        # 5. Desarma com o token de operador válido
         valid_token_resp = client.post(
             "/api/v1/risk/kill-switch/disengage",
-            json={"operator_token": "HERMES_RISK_OVERRIDE_2026"},
+            headers=auth,
+            json={"operator_token": "HERMES_OPERATOR_TEST_TOKEN"},
         )
         assert valid_token_resp.status_code == 200
         assert risk_engine.kill_switch.is_active() is False

@@ -15,11 +15,13 @@ services:
       - ../.env.production
     environment:
       - HERMES_ENV=production
-      - HERMES_OPERATOR_TOKEN=${HERMES_OPERATOR_TOKEN:-HERMES_RISK_OVERRIDE_2026}
-      - HERMES_GATEWAY_URL=${HERMES_GATEWAY_URL:-http://hermes-gateway:8001}
-      - HERMES_GATEWAY_TOKEN=${HERMES_GATEWAY_TOKEN:-HERMES_GATEWAY_TOKEN_DEFAULT}
+      - HERMES_OPERATOR_TOKEN=${HERMES_OPERATOR_TOKEN:?HERMES_OPERATOR_TOKEN is required}
+      - HERMES_GATEWAY_URL=${HERMES_GATEWAY_URL:-http://host.docker.internal:8001}
+      - HERMES_GATEWAY_TOKEN=${HERMES_GATEWAY_TOKEN:?HERMES_GATEWAY_TOKEN is required}
+      - HERMES_BRIDGE_TOKEN=${HERMES_BRIDGE_TOKEN:?HERMES_BRIDGE_TOKEN is required}
     ports:
-      - "8000:8000"
+      # Só localhost. Acesso remoto: reverse proxy (TLS) ou VPN, nunca 0.0.0.0.
+      - "127.0.0.1:8000:8000"
     volumes:
       - hermes_data_storage:/app/data/storage
       - hermes_data_parquet:/app/data/parquet
@@ -32,29 +34,10 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  # Serviço opcional do Gateway (emulado ou bridge Windows)
-  hermes-gateway:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.brain
-    image: hermes-quant/gateway:1.0.0
-    container_name: hermes-quant-gateway
-    restart: unless-stopped
-    command: ["python", "-m", "uvicorn", "execution.gateway_server:app", "--host", "0.0.0.0", "--port", "8001"]
-    env_file:
-      - ../.env.production
-    environment:
-      - HERMES_ENV=production
-      - HERMES_GATEWAY_TOKEN=${HERMES_GATEWAY_TOKEN:-HERMES_GATEWAY_TOKEN_DEFAULT}
-    ports:
-      - "8001:8001"
-    networks:
-      - hermes-internal-net
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
+  # O gateway MT5 não é um serviço deste compose Linux.
+  # No host Windows, com HERMES_BRIDGE_TOKEN definido:
+  #   uvicorn execution.windows_gateway_asgi:app --host 127.0.0.1 --port 8001
+  # Acesso remoto ao 8000/8001: reverse proxy com TLS ou VPN. Não publicar em 0.0.0.0.
 
 volumes:
   hermes_data_storage:

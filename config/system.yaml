@@ -16,6 +16,19 @@ execution:
   max_retry_attempts: 3
   retry_delay_seconds: 0.5
   order_timeout_ms: 10000
+  remote_gateway_enabled: false
+  bind_host: "127.0.0.1"
+  bind_port: 8000
+
+# Conta RoboForex ProCent: moeda USC (centavos), alavancagem até 1:2000, stop-out 30%.
+# symbol_suffix é concatenado ao símbolo lógico quando não houver alias explícito.
+broker:
+  name: "roboforex_procent"
+  account_currency: "USC"
+  symbol_suffix: ""
+  symbol_aliases: {}
+  max_leverage: 2000
+  stop_out_level_pct: 30.0
 
 network:
   heartbeat_interval_seconds: 1.0

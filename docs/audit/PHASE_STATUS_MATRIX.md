@@ -1,4 +1,8 @@
 # MATRIZ DE STATUS DE FASES DO QUANT HERMES (FASES 0 A 10)
+
+> **Correção de 19/11/2026.** A matriz original marcava fases como VALIDADO/HOMOLOGADO além da evidência. Leitura atual: o código de risco, estratégias, consenso, paper e monitoramento existe e tem testes offline. Não há homologação em conta RoboForex ao vivo. O backtest antigo não cobrava custo nem preenchia gap de forma conservadora — isso foi corrigido e não deve ser lido como prova de lucratividade. Pacotes `agents/`, `api/`, `dashboard/`, `backtesting/`, `execution/mt5`, `execution/mql5`, `execution/paper` e `execution/backtest` estão vazios. Ver `docs/PROJECT_STATUS.md`.
+
+# MATRIZ DE STATUS DE FASES DO QUANT HERMES (FASES 0 A 10)
 **Projeto:** QUANT HERMES — Autonomous Multi-Agent Quantitative Trading System  
 **Documento:** `docs/audit/PHASE_STATUS_MATRIX.md`  
 **Data de Emissão:** 07 de Novembro de 2026  

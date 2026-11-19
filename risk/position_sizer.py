@@ -5,8 +5,10 @@ Módulo: risk.position_sizer
 from __future__ import annotations
 
 import math
-from typing import Optional
+from typing import Optional, Tuple
+
 from core.models.market import SymbolSpecification
+from risk.trading_costs import adverse_swap_money_per_lot
 
 
 class PositionSizer:
@@ -42,12 +44,28 @@ class PositionSizer:
         return round(lot, digits)
 
     @staticmethod
+    def select_volume_constraints(
+        terminal_min: float,
+        terminal_step: float,
+        terminal_max: float,
+        config_min: Optional[float] = None,
+    ) -> Tuple[float, float, float]:
+        """
+        O volume mínimo, o passo e o máximo do terminal prevalecem sobre o YAML.
+        Um mínimo de configuração maior nunca é usado para arredondar o lote para cima.
+        """
+        del config_min  # mantido na assinatura para deixar o descarte explícito
+        return terminal_min, terminal_step, terminal_max
+
+    @staticmethod
     def calculate_lot(
         risk_money: float,
         entry_price: float,
         stop_loss_price: float,
         spec: SymbolSpecification,
         commission_per_lot: float = 0.0,
+        direction: str = "BUY",
+        config_min_volume: Optional[float] = None,
     ) -> float:
         """
         Calcula o lote a partir do capital em risco e da distância para o Stop Loss.
@@ -63,19 +81,27 @@ class PositionSizer:
         if sl_distance <= 0.0 or spec.tick_size <= 0.0 or spec.tick_value <= 0.0:
             return 0.0
 
-        # Perda financeira calculada para 1 lote padrão
+        # Perda financeira calculada para 1 lote padrão, na moeda da conta
+        # (USD ou USC, conforme tick_value do symbol_info — não há conversão extra).
         loss_per_lot = (sl_distance / spec.tick_size) * spec.tick_value
         if commission_per_lot > 0.0:
             loss_per_lot += commission_per_lot
+        loss_per_lot += adverse_swap_money_per_lot(spec, direction, entry_price)
 
         if loss_per_lot <= 0.0:
             return 0.0
 
         raw_lot = risk_money / loss_per_lot
+        vol_min, vol_step, vol_max = PositionSizer.select_volume_constraints(
+            terminal_min=spec.volume_min,
+            terminal_step=spec.volume_step,
+            terminal_max=spec.volume_max,
+            config_min=config_min_volume,
+        )
         return PositionSizer.normalize_lot(
             raw_lot=raw_lot,
-            vol_min=spec.volume_min,
-            vol_max=spec.volume_max,
-            vol_step=spec.volume_step,
+            vol_min=vol_min,
+            vol_max=vol_max,
+            vol_step=vol_step,
         )
 

@@ -98,3 +98,11 @@ class SymbolSpecification(HermesBaseModel):
     filling_mode: Literal["FOK", "IOC", "RETURN"] = Field(
         default="IOC", description="Modo de preenchimento de ordem suportado"
     )
+    swap_long: float = Field(default=0.0, description="Swap de compra por lote por noite (pontos ou moeda)")
+    swap_short: float = Field(default=0.0, description="Swap de venda por lote por noite (pontos ou moeda)")
+    swap_rollover3days: int = Field(
+        default=3, ge=0, le=6, description="Dia MT5 do swap triplo (0=domingo … 3=quarta)"
+    )
+    swap_mode: Literal["points", "account_currency", "interest"] = Field(
+        default="points", description="Unidade do swap reportada pelo symbol_info"
+    )

@@ -1,5 +1,6 @@
 # ==============================================================================
-# QUANT HERMES — ORQUESTRAÇÃO DE CONTÊINERES PRODUÇÃO (VPS LINUX)
+# OPCIONAL / desenvolvimento. O deploy da conta RoboForex é Windows.
+# Guia: docs/deploy/WINDOWS.md
 # ==============================================================================
 
 version: "3.8"
@@ -20,8 +21,10 @@ services:
     environment:
       - HERMES_ENV=production
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - HERMES_OPERATOR_TOKEN=${HERMES_OPERATOR_TOKEN:-HERMES_RISK_OVERRIDE_2026}
-      - HERMES_BRIDGE_TOKEN=${HERMES_BRIDGE_TOKEN:-HERMES_BRIDGE_SECRET_2026}
+      # Sem valor padrão. O compose falha se o segredo não vier do ambiente.
+      - HERMES_OPERATOR_TOKEN=${HERMES_OPERATOR_TOKEN:?HERMES_OPERATOR_TOKEN is required}
+      - HERMES_BRIDGE_TOKEN=${HERMES_BRIDGE_TOKEN:?HERMES_BRIDGE_TOKEN is required}
+      - HERMES_GATEWAY_TOKEN=${HERMES_GATEWAY_TOKEN:?HERMES_GATEWAY_TOKEN is required}
       - MT5_GATEWAY_URL=${MT5_GATEWAY_URL:-http://host.docker.internal:8001}
     volumes:
       - hermes-storage:/app/data/storage

@@ -37,13 +37,26 @@ from risk.engine import RiskEngine
 class TestPhase9PreflightChecker:
     """Valida o verificador pré-voo institucional."""
 
-    def test_preflight_passes_on_current_workspace(self):
+    def test_preflight_passes_on_current_workspace(self, monkeypatch):
+        monkeypatch.setenv("HERMES_OPERATOR_TOKEN", "operator-token-test-value")
+        monkeypatch.setenv("HERMES_GATEWAY_TOKEN", "gateway-token-test-value")
+        monkeypatch.setenv("HERMES_BRIDGE_TOKEN", "bridge-token-test-value")
         checker = PreflightChecker()
         report = checker.run_all_checks()
-        assert report.python_version.startswith("3.11")
+        major, minor, *_ = report.python_version.split(".")
+        assert int(major) == 3 and int(minor) >= 11
         assert len(report.critical_errors) == 0
         assert report.is_ready is True
         assert len(report.checks_passed) >= 3
+
+    def test_preflight_fails_without_required_secrets(self, monkeypatch):
+        monkeypatch.delenv("HERMES_OPERATOR_TOKEN", raising=False)
+        monkeypatch.delenv("HERMES_GATEWAY_TOKEN", raising=False)
+        monkeypatch.delenv("HERMES_BRIDGE_TOKEN", raising=False)
+        checker = PreflightChecker()
+        report = checker.run_all_checks()
+        assert report.is_ready is False
+        assert any("HERMES_OPERATOR_TOKEN" in err for err in report.critical_errors)
 
     def test_preflight_detects_sqlite_corruption(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
